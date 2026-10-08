@@ -1,0 +1,1150 @@
+<title>TDS Challan Desk</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: challans to pay by code first (click a code for its vendors), then certificate tracker, then differences. Detail sits in collapsed panels. */
+:root{
+  --bg:#f2f3f7; --surface:#ffffff; --sunk:#f7f8fb; --ink:#1a2032; --muted:#5b6377; --line:#dcdfe8;
+  --accent:#2c3c9e; --accent-ink:#ffffff; --accent-soft:#e5e8f7;
+  --ok:#1d7349; --ok-soft:#e1f2e8; --warn:#8f5400; --warn-soft:#fbefd9; --bad:#ad2a20; --bad-soft:#fbe5e2;
+  --f-display:"IBM Plex Sans Condensed","Arial Narrow",system-ui,sans-serif;
+  --f-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,"Cascadia Mono",Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#11131a; --surface:#191c26; --sunk:#151821; --ink:#e5e7ef; --muted:#9aa1b4; --line:#2b2f3e;
+  --accent:#93a0f4; --accent-ink:#11131a; --accent-soft:#242a49;
+  --ok:#62d39c; --ok-soft:#163226; --warn:#f2b85c; --warn-soft:#382a12; --bad:#ff8c82; --bad-soft:#3b1a17;
+  color-scheme:dark; } }
+:root[data-theme="dark"]{
+  --bg:#11131a; --surface:#191c26; --sunk:#151821; --ink:#e5e7ef; --muted:#9aa1b4; --line:#2b2f3e;
+  --accent:#93a0f4; --accent-ink:#11131a; --accent-soft:#242a49;
+  --ok:#62d39c; --ok-soft:#163226; --warn:#f2b85c; --warn-soft:#382a12; --bad:#ff8c82; --bad-soft:#3b1a17;
+  color-scheme:dark; }
+
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:14px;line-height:1.5}
+.wrap{max-width:1100px;margin:0 auto;padding-inline:20px;padding-block:24px 64px;display:flex;flex-direction:column;gap:24px}
+h1,h2{font-family:var(--f-display);text-wrap:balance;margin:0;letter-spacing:.005em}
+h1{font-size:1.8rem;font-weight:700;line-height:1.1}
+h2{font-size:1.2rem;font-weight:600}
+p{margin:0}
+.eyebrow{font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600}
+.num,td.n,th.n{font-family:var(--f-mono);font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+
+.top{display:flex;flex-wrap:wrap;gap:16px 24px;align-items:flex-end;justify-content:space-between}
+.title-block{display:flex;flex-direction:column;gap:8px;min-width:0}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;width:max-content;background:var(--surface)}
+.seg button{all:unset;cursor:pointer;padding:6px 14px;font:600 .82rem var(--f-body);color:var(--muted)}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button[aria-selected="true"]{background:var(--accent);color:var(--accent-ink)}
+.seg button:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.top > div{min-width:0}
+.upload{display:flex;flex-direction:column;gap:6px;align-items:flex-end;text-align:right;border-radius:10px;padding:8px;border:1.5px dashed transparent;transition:border-color .15s}
+.upload.drag{border-color:var(--accent);background:var(--accent-soft)}
+.source{font-size:.78rem;color:var(--muted);max-width:52ch}
+.vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;font:600 .85rem var(--f-body);border-radius:7px;padding:7px 14px;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer;width:max-content}
+.btn:hover{border-color:var(--accent)}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn.small{padding:4px 10px;font-size:.78rem}
+.btn:focus-visible,.upload:focus-within label,input:focus-visible,select:focus-visible,summary:focus-visible,.code-btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.bar{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:flex-end}
+.field{display:flex;flex-direction:column;gap:4px;min-width:0}
+.field label,.field .lbl{font-size:.7rem;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:600}
+input[type=date],input[type=month],input[type=text],input[type=number],select{font:inherit;font-size:.875rem;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:6px 8px;min-width:0}
+#view{font-weight:600;min-width:200px}
+.check{display:flex;gap:8px;align-items:center;font-size:.875rem}
+
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px}
+.total{display:flex;flex-wrap:wrap;gap:12px 32px;align-items:flex-end;padding:18px 20px;background:var(--accent-soft);border-color:transparent}
+.total .big{font-family:var(--f-display);font-size:2.4rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums}
+.total .part{display:flex;flex-direction:column;gap:2px}
+.total .mid{font-family:var(--f-mono);font-size:1.05rem;font-variant-numeric:tabular-nums}
+.total .meta{margin-left:auto;display:flex;flex-direction:column;gap:6px;align-items:flex-end;text-align:right}
+
+.sec-head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:6px 16px;margin-bottom:10px}
+.sec-head p{color:var(--muted);font-size:.84rem;max-width:72ch}
+.scroll{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:.86rem}
+th{font-size:.68rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600;text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);background:var(--sunk);white-space:nowrap}
+td{padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+tbody:last-of-type tr:last-child td, tr:last-child td{border-bottom:none}
+tfoot td{font-weight:600;background:var(--sunk);border-top:1px solid var(--line)}
+.dim{color:var(--muted);font-size:.78rem}
+td.desc{max-width:280px;min-width:180px;color:var(--muted)}
+tr.grp td{background:var(--sunk);font-weight:600;font-family:var(--f-display);font-size:.9rem}
+td select{max-width:190px}
+.code{font-family:var(--f-mono);font-size:.82rem;background:var(--sunk);border:1px solid var(--line);border-radius:4px;padding:1px 6px}
+
+.code-btn{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:10px;border-radius:4px}
+.code-btn .caret{display:inline-block;width:0;height:0;border-left:5px solid var(--muted);border-top:4px solid transparent;border-bottom:4px solid transparent;transition:transform .15s}
+.code-btn[aria-expanded="true"] .caret{transform:rotate(90deg)}
+tr.code-row:hover td{background:var(--sunk)}
+tr.code-row td{border-bottom:1px solid var(--line)}
+tr.drill > td{padding:0 12px 12px 36px;background:var(--sunk)}
+tr.drill table{font-size:.82rem;background:var(--surface);border:1px solid var(--line);border-radius:6px}
+tr.drill th{background:var(--surface)}
+
+.chip{display:inline-flex;align-items:center;gap:4px;font-size:.72rem;font-weight:600;border-radius:999px;padding:2px 8px;white-space:nowrap;line-height:1.5}
+.chip.ok{background:var(--ok-soft);color:var(--ok)}
+.chip.warn{background:var(--warn-soft);color:var(--warn)}
+.chip.bad{background:var(--bad-soft);color:var(--bad)}
+.chip.info{background:var(--accent-soft);color:var(--accent)}
+.chips{display:flex;flex-wrap:wrap;gap:4px}
+tr.sev-bad td:first-child{box-shadow:inset 3px 0 0 var(--bad)}
+tr.sev-warn td:first-child{box-shadow:inset 3px 0 0 var(--warn)}
+
+.issues{list-style:none;margin:0;padding:0}
+.issues li{display:grid;grid-template-columns:6px minmax(0,1fr);gap:12px;padding:10px 14px;border-bottom:1px solid var(--line)}
+.issues li:last-child{border-bottom:none}
+.issues .mark{border-radius:3px}
+.issues .bad .mark{background:var(--bad)} .issues .warn .mark{background:var(--warn)} .issues .info .mark{background:var(--accent)} .issues .ok .mark{background:var(--ok)}
+
+.panels{display:flex;flex-direction:column;gap:10px}
+details.card > summary{cursor:pointer;padding:12px 16px;font-family:var(--f-display);font-weight:600;font-size:1rem;display:flex;gap:10px;align-items:center;list-style:none}
+details.card > summary::-webkit-details-marker{display:none}
+details.card > summary::before{content:"";width:0;height:0;border-left:5px solid var(--muted);border-top:4px solid transparent;border-bottom:4px solid transparent;transition:transform .15s}
+details.card[open] > summary::before{transform:rotate(90deg)}
+details.card > summary .dim{font-family:var(--f-body);font-weight:400}
+details.card > .inner{padding:0 16px 16px;display:flex;flex-direction:column;gap:10px}
+details .note{font-size:.82rem;color:var(--muted);max-width:80ch}
+.master input[type=text]{width:100%;min-width:110px}
+.master input[type=number]{width:72px}
+
+.err{background:var(--bad-soft);color:var(--bad);border-radius:8px;padding:10px 14px;font-size:.875rem}
+.empty{padding:14px 16px;color:var(--muted)}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:8px 16px;border-radius:8px;font-size:.85rem;opacity:0;transition:opacity .2s;pointer-events:none}
+.toast.show{opacity:1}
+.foot{font-size:.76rem;color:var(--muted);max-width:90ch}
+
+@media (max-width:640px){ .upload{align-items:flex-start;text-align:left} .total .meta{margin-left:0;align-items:flex-start;text-align:left} .total .big{font-size:2rem} }
+@media (prefers-reduced-motion:reduce){ *{transition:none!important} }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="title-block">
+      <div class="seg" role="tablist" aria-label="Entity" id="entitySeg">
+        <button type="button" role="tab" id="ent-tech" data-entity="tech">AXI Technologies</button>
+        <button type="button" role="tab" id="ent-digital" data-entity="digital">AXI Digital</button>
+      </div>
+      <p class="eyebrow" id="entityLine">AXI Technologies India · TDS</p>
+      <h1>TDS Challan Desk</h1>
+    </div>
+    <div class="upload" id="drop">
+      <input type="file" id="file" class="vh" multiple accept=".xlsx,.xls,.xlsm,.csv">
+      <label for="file" class="btn primary">Upload Concur file</label>
+      <p class="source" id="source"></p>
+    </div>
+  </header>
+
+  <div id="error" class="err" hidden></div>
+
+  <div class="bar" aria-label="View">
+    <div class="field"><label for="view">Show</label><select id="view"></select></div>
+    <div class="field"><label for="payDate">Challan payment date</label><input type="date" id="payDate"></div>
+  </div>
+
+  <section class="card total" id="total" aria-label="Amount to pay"></section>
+
+  <section>
+    <div class="sec-head"><h2 id="codesTitle">Challans by code</h2>
+      <button class="btn small" id="copyChallan" type="button">Copy for Excel</button></div>
+    <div class="card scroll" id="codesTable"></div>
+  </section>
+
+  <section>
+    <div class="sec-head"><h2>Lower deduction certificates</h2><p id="certNote"></p></div>
+    <div class="card scroll" id="certs"></div>
+  </section>
+
+  <section>
+    <div class="sec-head"><h2>Purchases of goods (194Q)</h2><p>0.1% TDS on purchases from one seller above ₹50 lakh in the year (value before GST). Click a vendor to see the invoices.</p></div>
+    <div class="card scroll" id="goods"></div>
+  </section>
+
+  <section>
+    <div class="sec-head"><h2 id="diffTitle">Differences to address</h2><p>Where the TDS AP deducted (invoice total less the amount paid per bank) doesn't match what is due.</p></div>
+    <div class="card scroll" id="diffs"></div>
+  </section>
+
+  <div class="panels">
+    <details class="card" id="pInvoices">
+      <summary>Invoice detail <span class="dim" id="invCount"></span></summary>
+      <div class="inner">
+        <div><button class="btn small" id="copyInvoices" type="button">Copy for Excel</button></div>
+        <div class="scroll" id="invoices"></div>
+      </div>
+    </details>
+    <details class="card" id="pBank">
+      <summary>Other bank debits <span class="dim" id="bankCount"></span></summary>
+      <div class="inner"><p class="note">Debits not linked to a Concur invoice, so no TDS is worked out on them.</p><div class="scroll" id="bank"></div></div>
+    </details>
+    <details class="card" id="pPrior">
+      <summary>Checks on earlier months <span class="dim" id="priorCount"></span></summary>
+      <div class="inner"><p class="note">April onwards, from the advisor's monthly summaries, tested against the vendor rules and certificates.</p><ul class="issues" id="prior"></ul>
+        <div><button class="btn small" id="saveMonth" type="button">Save this month to the year</button></div>
+        <p class="note">Saving keeps the uploaded month in this browser, so next month's certificate usage and these checks include it.</p></div>
+    </details>
+    <details class="card" id="pSettings">
+      <summary>Settings</summary>
+      <div class="inner bar">
+        <div class="field"><label for="period">Month of the uploaded file</label><input type="month" id="period"></div>
+        <div class="field"><label for="rate">Interest on late items</label>
+          <select id="rate">
+            <option value="1.5">1.5% a month (TDS booked, deposited late)</option>
+            <option value="1">1% a month (TDS deducted late)</option>
+          </select></div>
+        <div class="field"><span class="lbl">Thresholds</span>
+          <label class="check" for="thr"><input type="checkbox" id="thr" checked> Skip TDS on bills under the section limit</label></div>
+      </div>
+    </details>
+    <details class="card" id="rulesBox">
+      <summary>Vendor rules</summary>
+      <div class="inner">
+        <p class="note">Each invoice takes the first rule whose vendor text appears in the vendor name; rules with description text are checked first, so one vendor can be split (Indiqube rent against services). A lower rate applies a certificate from its valid-from date up to its limit. Used before this month is worked out from earlier months unless you enter a TRACES figure. Changes are saved in this browser.</p>
+        <div class="scroll"><table class="master" id="master"></table></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn small" id="addRule" type="button">Add rule</button>
+          <button class="btn small" id="resetRules" type="button">Restore default rules</button>
+        </div>
+      </div>
+    </details>
+    <details class="card" id="codesBox">
+      <summary>Section codes (Income-tax Act, 2025)</summary>
+      <div class="inner">
+        <p class="note">Codes follow the advisor's April–August summaries: 1023 contractors who are individuals or HUFs (1%), 1024 other contractors (2%), 1026 technical fees (2%), 1027 professional fees (10%), 1008 equipment rent, 1009 property rent. SWAI's certificate places professional fees at section 393(1), Table Sl. No. 6(iii).D(b). Confirm before filing.</p>
+        <div class="scroll"><table id="codes"></table></div>
+      </div>
+    </details>
+  </div>
+
+  <p class="foot">Rates and limits: 194C 1% (individual/HUF) or 2%, single bill over ₹30,000 or ₹1,00,000 a year. 194J 2% technical or 10% professional, over ₹50,000 a year. 194-I 2% equipment or 10% property, over ₹50,000 a month. TDS is on the amount before GST. Challan due on the 7th of the next month (30 April for March). Files are read in your browser and not sent anywhere.</p>
+</div>
+<div class="toast" id="toast" role="status"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+(function(){
+const SECTIONS = {
+  '194C':      {name:'Contractors – company / firm', rate:2,  rule:'single',  single:30000, annual:100000},
+  '194C-ind':  {name:'Contractors – individual / HUF', rate:1, rule:'single', single:30000, annual:100000},
+  '194J-tech': {name:'Technical services', rate:2, rule:'annual', annual:50000},
+  '194J-prof': {name:'Professional fees', rate:10, rule:'annual', annual:50000},
+  '194-I(a)':  {name:'Rent – plant, machinery, equipment', rate:2, rule:'monthly', monthly:50000},
+  '194-I(b)':  {name:'Rent – land, building, furniture', rate:10, rule:'monthly', monthly:50000},
+  '194H':      {name:'Commission / brokerage', rate:2, rule:'annual', annual:20000},
+  'NIL':       {name:'No TDS (goods and similar)', rate:0, rule:'none'}
+};
+const DEFAULT_CODES = {'194C':'1024','194C-ind':'1023','194J-tech':'1026','194J-prof':'1027','194-I(a)':'1008','194-I(b)':'1009','194H':'','NIL':''};
+const BLANK_RULE = {vendor:'', keyword:'', section:'194C', ldc:'', cert:'', ldcFrom:'', ldcLimit:'', ldcUsed:'', fyOver:false, bank:''};
+const DEFAULT_RULES = [
+  {vendor:'computer junction', section:'194-I(a)'},
+  {vendor:'indiqube', keyword:'rent', section:'194-I(b)', ldc:'1', cert:'1AB0326XYI', ldcFrom:'2026-04-01', ldcLimit:'44871000'},
+  {vendor:'indiqube', keyword:'data management', section:'194J-tech', fyOver:true},
+  {vendor:'indiqube', section:'194C', fyOver:true},
+  {vendor:'swai', section:'194J-prof', ldc:'1', cert:'1NB0526BXL', ldcFrom:'2026-05-25', ldcLimit:'50000000'},
+  {vendor:'mispras', section:'194-I(b)', ldc:'4.01', cert:'1AC0326HYR', ldcFrom:'2026-04-01', ldcLimit:'18265920'},
+  {vendor:'indeed', section:'194C'},
+  {vendor:'info edge', section:'194J-prof'},
+  {vendor:'treta', section:'194J-prof'},
+  {vendor:'analytics india magazine', section:'194J-prof'},
+  {vendor:'urelfy', section:'194J-tech'},
+  {vendor:'njm productions', section:'194C'},
+  {vendor:'native promoters', section:'194C'},
+  {vendor:'royal international', section:'194C'},
+  {vendor:'bhandary', section:'194C-ind'},
+  {vendor:'fun and joy', section:'194C-ind'},
+  {vendor:'wep solutions', section:'194-I(a)'},
+  {vendor:'onlineteksupport', section:'194C'},
+  {vendor:'atria convergence', section:'194C'},
+  {vendor:'icici lombard', section:'NIL'},
+  {vendor:'consolidated teknics', section:'NIL'}
+].map(r => ({...BLANK_RULE, ...r}));
+// Earlier months, from the advisor's monthly TDS payable summaries: [month, vendor, invoice, date, before GST, GST, TDS, interest, code, nature]
+// Goods purchases for 194Q tracking (value before GST): [month, vendor, document, date, value, note]
+const GOODS = [
+  ['2026-05','Onlineteksupport IT Solutions Private Limited','BLR2627PI000075 (proforma, PO2740)','2026-05-11',1902665,'Laptops - PO raised by AxiCorp Australia'],
+  ['2026-06','Onlineteksupport IT Solutions Private Limited','BLR2627IN000731','2026-06-10',55825,'Power banks'],
+  ['2026-07','Onlineteksupport IT Solutions Private Limited','BLR2627IN001005','2026-07-01',279100,'Monitors, webcam, speaker'],
+  ['2026-07','Onlineteksupport IT Solutions Private Limited','BLR2627PI000271 (proforma, PO2789)','2026-07-11',1382000,'Laptops - PO bills AxiCorp Australia, ships to AXI Digital'],
+  ['2026-08','Onlineteksupport IT Solutions Private Limited','BLR2627PI000315 (proforma, PO2798)','2026-07-28',298299,'MacBook - ships to AXI Technologies and AXI Digital'],
+  ['2026-06','Indiqube Spaces Limited','KA/JUN26/1632','2026-06-24',200640,'CCTV hardware (fit-out)'],
+  ['2026-07','Indiqube Spaces Limited','KA/JUL26/1808','2026-07-29',1087958,'AV equipment (fit-out)'],
+  ['2026-07','Indiqube Spaces Limited','KA/JUL26/1791','2026-07-28',2917156,'Network hardware (fit-out); licences Rs 3,41,666 excluded'],
+  ['2026-06','Consolidated Teknics India Pvt Ltd','CTI/26-27/84','2026-06-06',91100,'Bottles, frames, bags'],
+  ['2026-06','Consolidated Teknics India Pvt Ltd','CTI/26-27/110','2026-06-15',4740,'Awards'],
+  ['2026-09','Consolidated Teknics India Pvt Ltd','CTI/26-27/223','2026-08-10',22450,'Water bottles']
+];
+const HISTORY = [
+  ['2026-04','Mispras Furnishings Private Limited','UVKA/26-27/00374','2026-04-27',992160,178589,39786,0,'1009',''],
+  ['2026-04','Mispras Furnishings Private Limited','UVKA/26-27/00376','2026-04-27',80000,14400,3208,0,'1009',''],
+  ['2026-04','Mispras Furnishings Private Limited','UVKA/26-27/00375','2026-04-27',450000,81000,18045,0,'1009',''],
+  ['2026-04','SWAI Technologies Private Limited','SWAI/2026/27/7','2026-04-01',28000,5040,560,0,'1024',''],
+  ['2026-04','SWAI Technologies Private Limited','SWAI/2026/27/6','2026-04-01',849062,152831,16981,0,'1024',''],
+  ['2026-04','SWAI Technologies Private Limited','SWAI/2026/27/5','2026-04-01',575000,103500,11500,0,'1024',''],
+  ['2026-05','Mispras Furnishings Private Limited','UVKA/26-27/00778','2026-05-25',992160,178589,39786,0,'1009',''],
+  ['2026-05','Mispras Furnishings Private Limited','UVKA/26-27/00780','2026-05-25',450000,81000,18045,0,'1009',''],
+  ['2026-05','Mispras Furnishings Private Limited','UVKA/26-27/00779','2026-05-25',80000,14400,3208,0,'1009',''],
+  ['2026-05','Computer Junction Private Limited','KATI-26-27-00115','2026-04-28',135726,24431,2715,122,'1008',''],
+  ['2026-05','SWAI Technologies Private Limited','SWAI/2026/27/22','2026-04-29',45000,8100,900,41,'1024',''],
+  ['2026-05','SWAI Technologies Private Limited','SWAI/2026/27/27','2026-05-01',5339647,961136,106793,0,'1024',''],
+  ['2026-05','SWAI Technologies Private Limited','SWAI/2026/27/26','2026-05-01',1087500,195750,21750,0,'1024',''],
+  ['2026-05','SWAI Technologies Private Limited','SWAI/2026/27/28','2026-05-01',122100,21978,2442,0,'1024',''],
+  ['2026-05','SWAI Technologies Private Limited','SWAI/2026/27/29','2026-05-01',5849,1053,117,0,'1024',''],
+  ['2026-05','SWAI Technologies Private Limited','SWAI/2026/27/34','2026-05-06',620000,111600,12400,0,'1024',''],
+  ['2026-05','NJM Productions LLP','INV-2026-27004','2026-05-27',285000,51300,5700,0,'1024',''],
+  ['2026-05','Treta Advisors','2026-27/003','2026-05-01',100000,18000,10000,0,'1027',''],
+  ['2026-06','Indiqube Spaces Limited','KA/JUN26/0830','2026-06-03',4079200,734256,40792,0,'1009','Rent (monthly workstations, assumed from amount)'],
+  ['2026-06','Indiqube Spaces Limited','KA/JUN26/1219','2026-06-15',642999,115740,6430,0,'1009',''],
+  ['2026-06','Indiqube Spaces Limited','KA/JUN26/1218','2026-06-15',251250,45225,2513,0,'1009',''],
+  ['2026-06','Computer Junction Private Limited','KATI-26-27-00353','2026-05-30',117422,21136,2348,106,'1008',''],
+  ['2026-06','SWAI Technologies Private Limited','SWAI/2026/27/43','2026-05-20',45000,8100,900,41,'1024',''],
+  ['2026-06','SWAI Technologies Private Limited','SWAI/2026/27/51','2026-06-01',9724912,1750484,97249,0,'1024',''],
+  ['2026-06','SWAI Technologies Private Limited','SWAI/2026/27/52','2026-06-01',1375000,247500,13750,0,'1024',''],
+  ['2026-06','SWAI Technologies Private Limited','SWAI/2026/27/53','2026-06-01',171600,30888,1716,0,'1024',''],
+  ['2026-06','Native Promoters Private Limited','RE-033','2026-06-09',687500,123750,13750,0,'1024',''],
+  ['2026-06','Royal International Worldwide Relocations','RI/26-27/BLR0732','2026-06-06',69020,12424,1380,0,'1024',''],
+  ['2026-06',"Bhandary's Kitchen",'BKC/26-27/107','2026-06-07',245643,12282,2456,0,'1023',''],
+  ['2026-06','Treta Advisors','2026-27/006','2026-06-01',100000,18000,10000,0,'1027',''],
+  ['2026-06','Analytics India Magazine Private Limited','AIM-2726','2026-05-23',1100000,198000,110000,3300,'1027',''],
+  ['2026-07','Indiqube Spaces Limited','KA/JUL26/0842','2026-07-07',62500,11250,625,0,'1009','IT charges - data management Jul-Sep (SAC 998315)'],
+  ['2026-07','Indiqube Spaces Limited','KA/JUN26/1794','2026-06-30',60000,10800,600,27,'1009','Rent - two wheeler park June'],
+  ['2026-07','Indiqube Spaces Limited','KA/JUN26/1630','2026-06-24',35537,6397,355,16,'1009','IT charges - data management and commissioning (SAC 998315/998734)'],
+  ['2026-07','Indiqube Spaces Limited','KA/JUL26/0457','2026-07-01',4139200,745056,41392,0,'1009','Rent - workstations, car park, two wheeler park July'],
+  ['2026-07','Indiqube Spaces Limited','KA/JUN26/1632','2026-06-24',210840,37951,2108,95,'1009','IT charges - CCTV hardware Rs 2,00,640 plus installation Rs 10,200'],
+  ['2026-07','SWAI Technologies Private Limited','SWAI/2026/27/83','2026-07-02',840000,151200,8400,0,'1024',''],
+  ['2026-07','SWAI Technologies Private Limited','SWAI/2026/27/80','2026-07-01',11768773,2118379,117688,0,'1024',''],
+  ['2026-07','SWAI Technologies Private Limited','SWAI/2026/27/79','2026-07-01',2211364,398046,22114,0,'1024',''],
+  ['2026-07','SWAI Technologies Private Limited','SWAI/2026/27/81','2026-07-01',203300,36594,2033,0,'1024',''],
+  ['2026-07','Treta Advisors','2026-27/009','2026-07-01',100000,18000,10000,0,'1027',''],
+  ['2026-07','Info Edge (India) Ltd','2627SQ0109869','2026-07-10',484000,87120,48400,0,'1027',''],
+  ['2026-08','Indiqube Spaces Limited','KA/JUL26/1825','2026-07-23',10000,1800,100,5,'1009','Other charges - IndiQube football league event (SAC 999651)'],
+  ['2026-08','Indiqube Spaces Limited','KA/AUG26/0055','2026-08-01',4139200,745056,41392,0,'1009','Rent - workstations, car park, two wheeler park August'],
+  ['2026-08','Indiqube Spaces Limited','KA/JUL26/1808','2026-07-29',1110458,199882,11105,500,'1009','IT charges - AV equipment Rs 10,87,958 plus installation Rs 22,500'],
+  ['2026-08','Indiqube Spaces Limited','KA/JUL26/1731','2026-07-28',3258822,586588,32588,1466,'1009','IT charges - network hardware Rs 29,17,156 plus software licences Rs 3,41,666 (PDF numbered KA/JUL26/1791)'],
+  ['2026-08','Computer Junction Private Limited','KATI-26-27-00856','2026-07-31',63113,11361,1262,57,'1008',''],
+  ['2026-08','Computer Junction Private Limited','KATI-26-27-00863','2026-08-04',15750,2835,315,0,'1008','Loss charges for 15 missing keyboards (compensation, not rent)'],
+  ['2026-08','SWAI Technologies Private Limited','SWAI/2026/27/105','2026-08-01',200316,36057,2003,0,'1024',''],
+  ['2026-08','SWAI Technologies Private Limited','SWAI/2026/27/106','2026-08-01',21591,3886,216,0,'1024',''],
+  ['2026-08','SWAI Technologies Private Limited','SWAI/2026/27/104','2026-08-01',12164750,2189655,121648,0,'1024',''],
+  ['2026-08','SWAI Technologies Private Limited','SWAI/2026/27/103','2026-08-01',2200000,396000,22000,0,'1024',''],
+  ['2026-08','SWAI Technologies Private Limited','SWAI/2026/27/112','2026-08-04',4764690,857644,47647,0,'1024',''],
+  ['2026-08','SWAI Technologies Private Limited','SWAI/2026/27/113','2026-08-04',2098354,377704,20984,0,'1024',''],
+  ['2026-08','NJM Productions LLP','INV-2026-27008','2026-07-30',353250,63585,7065,318,'1024',''],
+  ['2026-08','Fun and Joy at Work','F/AUG/024/26-27','2026-08-06',39000,7020,390,0,'1023',''],
+  ['2026-08','Urelfy Private Limited','I/2026-27/B0096','2026-08-13',660000,118800,13200,0,'1026',''],
+  ['2026-08','Treta Advisors','2026-27/013','2026-08-01',100000,18000,10000,0,'1027','']
+];
+const SAMPLE_INV = [
+  ['Computer Junction Private Limited','KATI-26-27-01048','2026-08-31',7552,1152,'Laptop and accessories rental – August 2026 – screen damage and missing items'],
+  ['Computer Junction Private Limited','KATI-26-27-01049','2026-08-31',40150,6124.5,'Laptop and accessories rental – August 2026'],
+  ['Computer Junction Private Limited','KATI-26-27-00588','2026-06-30',80948,12348,'Laptop and accessories rental – June 2026'],
+  ['Consolidated Teknics India Pvt Ltd','CTI/26-27/223','2026-08-10',26491,4041,'Water bottle – 38 nos bottle with name and logo'],
+  ['Indiqube Spaces Limited','KA/JUL26/1396','2026-07-21',27140,4140,'MST technical service – manpower, pantry boy and housekeeping'],
+  ['Indiqube Spaces Limited','KA/AUG26/1529','2026-08-19',12863,612.5,'Other contract food services – Independence Day snacks box'],
+  ['Indiqube Spaces Limited','KA/AUG26/1099','2026-08-10',427052,65143.54,'Data management charges – differential amount for BW upgrade – July 2026'],
+  ['Indiqube Spaces Limited','KA/SEP26/0296','2026-09-01',4884256,745056,'Rent – two wheeler park, car park and workstations – September 2026'],
+  ['Indeed India Operations Private Limited','INI26-00115807','2026-09-03',1032500,157500,'ROW Employer Branding Suite subscription – 03/09/2026 to 02/09/2027'],
+  ['Indeed India Operations Private Limited','INI26-00115806','2026-09-03',1180000,180000,'Employer Branding Suite subscription – 03/09/2026 to 02/09/2027'],
+  ['Onlineteksupport IT Solutions Private Limited','BLR2627IN001904','2026-09-12',2000,305.08,'Delivery charges – laptop and headset to Mumbai'],
+  ['SWAI Technologies Private Limited','SWAI/2026/27/136','2026-09-01',233404,35604,'Service fee (laptop) – 14 Windows laptops and 8 MacBooks – September 2026'],
+  ['SWAI Technologies Private Limited','SWAI/2026/27/137','2026-09-01',240802.6,36732.6,'Reimbursement – travelling expenses September 2026'],
+  ['SWAI Technologies Private Limited','SWAI/2026/27/134','2026-09-01',2301000,351000,'Recruitment service fee (contract to hire) – 1 to 31 August 2026'],
+  ['SWAI Technologies Private Limited','SWAI/2026/27/135','2026-09-01',14610633.74,2228740.74,'Co-delivery services – 1 to 31 August 2026'],
+  ['Treta Advisors','2026-27/015','2026-09-01',118000,18000,'Business support and residential directorship services for Aug 26'],
+  ['WeP Solutions Limited','268329703472','2026-09-21',7794.92,1189.06,'Managed print services – 21 Aug to 20 Sep 2026']
+];
+const SAMPLE_BANK = [
+  ['2026-09-02','INW USD249967.0@93.9',0,23471901.30,''],
+  ['2026-09-02','DPO2724502321458 CGST',2517.47,0,''],
+  ['2026-09-02','DPO2724502321458 SGST',2517.47,0,''],
+  ['2026-09-07','CBDT/Bank Reference No:K2625052927570/CIN No:26090700314193HDFC/Online',334259,0,''],
+  ['2026-09-09','NEFT Dr-UTIB0CCH274-HDFC PENSION MANAGEMENT COMPANY LIMITED-NETBANK',206658,0,''],
+  ['2026-09-10','A2AINT01 - HDFC000000X - employee claim',98029,0,'Expense Claim'],
+  ['2026-09-10','DOMNEFT01 - HSBC0560002 - employee claim',177558.47,0,'Expense Claim'],
+  ['2026-09-11','DOMNEFT01 - UTIB0000644 - C42343090926082122 - 919020087815167 - COMPUTER JU',126469.50,0,'Invoice'],
+  ['2026-09-11','DOMNEFT01 - SBIN0008577 - C42708090926082418 - 62123851178 - Consolidated Tekn',26491,0,'Invoice'],
+  ['2026-09-14','RTGS Dr-UTIB0001541-INDIQUBE SPACES LIMITED-CBX Internet-HDFCR52026091458514',5305947.41,0,'Invoice'],
+  ['2026-09-15','CBDT/Bank Reference No:K2625853402826/CIN No:26091500032727HDFC/Online',5000000,0,''],
+  ['2026-09-17','FT - C79658160926204643 - 59208612246755 - MISPRAS FURNISHINGS PRIVATE LIMITED',0,1799900,''],
+  ['2026-09-18','INW 170926I049904893 USD299967.0@94.65',0,28391876.55,''],
+  ['2026-09-18','170926I049904893 DPO2726159767771 CGST',2960.27,0,''],
+  ['2026-09-18','170926I049904893 DPO2726159767771 SGST',2960.27,0,''],
+  ['2026-09-20','0088040873425/SBIEPYEKHAJANEII',16200,0,''],
+  ['2026-09-25','Multiple Payees C56044180926132816 - AXI TECH SEP26PAY',22800000,0,''],
+  ['2026-09-25','A2AINT01 - HDFC000000X - employee claim',19531.72,0,'Expense Claim'],
+  ['2026-09-25','A2AINT01 - HDFC000000X - employee claim',76434.65,0,'Expense Claim'],
+  ['2026-09-25','DOMNEFT01 - ICIC0003698 - C60854250926084108 - 369805000030 - Onlineteksupport',2000,0,'Invoice'],
+  ['2026-09-25','DOMNEFT01 - UTIB0001541 - C65637250926084603 - 920030018090730 - WeP Solutions',7794.92,0,'Invoice'],
+  ['2026-09-25','A2AINT01 - HDFC000000X - C65244250926084509 - 50200097514091 - TRETA ADVISORS',108000,0,'Invoice'],
+  ['2026-09-25','RTGS Dr-CITI0000006-Indeed India Operation PVT Ltd-CBX Internet-HDFCR520260925634',2175000,0,'Invoice'],
+  ['2026-09-25','A2AINT01 - HDFC000000X - C62797250926084346 - 50200011992791 - SWAI TECHNOLOGIES',17238502.71,0,'Invoice'],
+  ['2026-09-28','Multiple Payees C39880280926091629 -',1150000,0,'']
+];
+
+const MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const TOL = 2;
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const norm = s => String(s ?? '').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+const r2 = n => Math.round((n + Number.EPSILON) * 100) / 100;
+const sum = (arr, f) => arr.reduce((s, x) => s + (typeof f === 'function' ? f(x) : x[f]), 0);
+const fmt = (n, dp = 2) => (n < -0.004 ? '−' : '') + Math.abs(n).toLocaleString('en-IN', {minimumFractionDigits:dp, maximumFractionDigits:dp});
+const rs = (n, dp = 2) => '₹' + fmt(n, dp);
+const fdate = d => d ? String(d.getDate()).padStart(2,'0') + '-' + MON[d.getMonth()] + '-' + d.getFullYear() : '—';
+const mi = d => d.getFullYear() * 12 + d.getMonth();
+const iso = d => d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+const monthLabel = m => MON[m % 12] + ' ' + Math.floor(m / 12);
+
+// Entity-specific keys are prefixed; AXI Technologies keeps the original keys so saved rules survive.
+let currentEntity = 'tech';
+const skey = key => 'tdsdesk.' + (currentEntity === 'tech' || key === 'entity' ? '' : currentEntity + '.') + key;
+function store(key, val){ try { localStorage.setItem(skey(key), JSON.stringify(val)); } catch(e){} }
+function recall(key, fallback){ try { const v = localStorage.getItem(skey(key)); return v ? JSON.parse(v) : fallback; } catch(e){ return fallback; } }
+
+function toNum(v){
+  if (typeof v === 'number') return v;
+  const s = String(v ?? '').replace(/[,\s₹]/g,'');
+  if (!s || s === '-') return 0;
+  const n = parseFloat(s); return isNaN(n) ? 0 : n;
+}
+function toDate(v){
+  if (v instanceof Date && !isNaN(v)) { const d = new Date(v.getTime() + 120000); return new Date(d.getFullYear(), d.getMonth(), d.getDate()); }
+  if (typeof v === 'number' && v > 20000 && v < 80000) { const d = new Date(Math.round((v - 25569) * 86400000)); return new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()); }
+  const s = String(v ?? '').trim(); if (!s) return null;
+  let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/); if (m) return new Date(+m[1], +m[2]-1, +m[3]);
+  m = s.match(/^(\d{1,2})[-\/ .]([A-Za-z]{3,9})[-\/ .,]*(\d{2,4})$/);
+  if (m) { const k = MON.findIndex(x => x.toLowerCase() === m[2].slice(0,3).toLowerCase()); if (k >= 0) { let y = +m[3]; if (y < 100) y += 2000; return new Date(y, k, +m[1]); } }
+  m = s.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})$/);
+  if (m) { let y = +m[3]; if (y < 100) y += 2000; return new Date(y, +m[2]-1, +m[1]); }
+  const d = new Date(s); return isNaN(d) ? null : new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
+// AXI Digital - September 2026 Concur extract and Kotak statement (HDFC lines not yet provided)
+const DIGITAL_INV = [
+  ['Bharti Airtel Limited','MF2729I008720176','2026-08-27',2882.74,439.74,'Mobile services 26-Jul to 25-Aug-2026'],
+  ['Cerebro Consumer Consulting','CCC/2026-27/0019','2026-08-25',329810,50310,'Research cost (6 MGDs + 6 IDIs + 2 expert interviews) and web streaming cost'],
+  ['EigenFlow LLP','INV-2026-0004','2026-08-31',500000,0,'Professional fees for IT consultancy services, August 2026'],
+  ['Holiday Inn - Brigade Hotel Ventures','HIB306501','2026-08-31',14700,700,'Accommodation - Abhijith Nayak, 31 Aug - 2 Sep 2026'],
+  ['MoEngage','INV/MO/2627/1797','2026-08-21',1351005.60,206085.60,'Platform fees 1 Aug 2026 to 31 Jul 2027 (invoice not yet received)'],
+  ['BootLabs Technologies Private Limited','BLIK/26-27/00152','2026-09-08',743400,113400,'Senior DevOps Engineer - Akshay Solanki, Jul and Aug 2026'],
+  ['Fab Money','Fab-2026-27/68','2026-08-31',106200,16200,'Hourly advisory services for SB - August 2026'],
+  ['SWAI Technologies Private Limited','SWAI/2026/27/138','2026-09-01',1083387.50,165262.50,'Recruitment service fee (contract to hire), 1-31 Aug 2026'],
+  ['Treta Advisors','2026-27/016','2026-09-01',147500,22500,'Business support services for Aug 26']
+];
+const DIGITAL_BANK = [
+  ['2026-09-22','Recd:IMPS/626541556244/AXI DIGITA/KKBK/X2978/Inter',0,100000,''],
+  ['2026-09-22','SentIMPS626511235029Chetan Min/HDFCX7010/IB REIM',37366.89,0,'Expense Claim'],
+  ['2026-09-22','REIMBURSEMENT',3699.74,0,'Expense Claim'],
+  ['2026-09-22','REIMBURSEMENT',9607.41,0,'Expense Claim'],
+  ['2026-09-23','SentIMPS626612795083Holidayy I/UTIBX3197/IB ACCO',14700,0,'Invoice'],
+  ['2026-09-23','BHARTI AIRTE 0253903913',2882.74,0,'Invoice'],
+  ['2026-09-24','IB:MARKETING',301860,0,'Invoice'],
+  ['2026-09-29','SentIMPS627218746711Fab Money /UTIBX8113/IB MARK',97200,0,'Invoice'],
+  ['2026-09-29','SentIMPS627219748282Sulabh Kot/IDFBX9489/IB REIM',20338.14,0,'Expense Claim'],
+  ['2026-09-29','SentIMPS627219748667Manish Kum/IDFBX1992/IB REIM',15860.96,0,'Expense Claim'],
+  ['2026-09-29','SentIMPS627219749595Abhijith N/ICICX8172/IB REIM',42398.67,0,'Expense Claim'],
+  ['2026-09-29','SentIMPS627219750408Pratik Kan/HDFCX9292/IB REIM',2443.87,0,'Expense Claim'],
+  ['2026-09-29','SentIMPS627219750879Chetan Min/HDFCX7010/IB REIM',20518.16,0,'Expense Claim'],
+  ['2026-09-29','REIMBURSEMENT',95158,0,'Expense Claim'],
+  ['2026-09-30','HDFCR52026093065937113 AXI DIGITAL INDIA PVT LTD',0,500000,''],
+  ['2026-09-30','IB:MARKETMAKER',450000,0,'Invoice'],
+  ['2026-09-04','HDFC: CBDT/BANK REFERENCE NO:K2624752759397/CIN NO:26090400146979HDFC/ONLINE',44156,0,''],
+  ['2026-09-04','HDFC: ME DC SI 514834XXXXXX8756 ANTHROPIC* CLAUDE SUB',1890,0,''],
+  ['2026-09-05','HDFC: DC INTL POS TXN DCC+ST 300826',116.13,0,''],
+  ['2026-09-06','HDFC: DC INTL POS TXN MARKUP+ST 040926',78.05,0,''],
+  ['2026-09-23','HDFC: IB FUNDS TRANSFER CR-50200111792978-AXI DIGITAL INDIA PVT LTD',0,2000000,''],
+  ['2026-09-24','HDFC: RTGS DR-KKBK0008066-AXI DIGITAL INDIA PRIVATE LIMITED-INTERNAL',400000,0,''],
+  ['2026-09-25','HDFC: IB BILLPAY DR-HDFCRM-555153XXXXXX9498',300000,0,''],
+  ['2026-09-28','HDFC: IB BILLPAY DR-HDFCRM-555153XXXXXX9498',1000000,0,''],
+  ['2026-09-28','HDFC: 50200097514091-TPT-TRETA-TRETA ADVISORS',135000,0,'Invoice'],
+  ['2026-09-28','HDFC: IMPS-627143892869-AXI DIGITAL INDIA PRIVATE LIMITED-KKBK-INTERNAL',150000,0,''],
+  ['2026-09-29','HDFC: IB FUNDS TRANSFER CR-50200111792978-AXI DIGITAL INDIA PVT LTD',0,1600000,''],
+  ['2026-09-30','HDFC: 50200011992791-TPT-GEEKTRUST-SWAI TECHNOLOGIES PVT LTD',1074206.25,0,'Invoice'],
+  ['2026-09-30','HDFC: ME DC SI 514834XXXXXX8756 LOVABLE',9840.47,0,''],
+  ['2026-09-30','HDFC: RTGS DR-KKBK0008066-AXI DIGITAL INDIA PRIVATE LIMITED-INTERNAL',500000,0,''],
+  ['2026-09-30','HDFC: IB FUNDS TRANSFER CR-50200111792978-AXI DIGITAL INDIA PVT LTD',0,1400000,''],
+  ['2026-09-30','HDFC: 50200008672371-TPT-VENDOR-MOENGAGE INDIA PVT LTD',1328107.20,0,'Invoice']
+];
+// AXI Digital earlier months, from the advisor's monthly TDS payable summaries
+const DIGITAL_HISTORY = [
+  ['2026-04','Mispras Furnishings Private Limited','UVKA/26-27/00377','2026-04-27',10000,1800,1000,0,'1009','Office rent'],
+  ['2026-04','Raghu M','INV-00309','2026-02-11',350000,0,35000,2100,'1027','FY 2025-26 invoice carried into April'],
+  ['2026-04','Raghu M','INV-00441','2026-01-06',300000,0,30000,2250,'1027','FY 2025-26 invoice carried into April'],
+  ['2026-04','Amazon Web Services India Private Limited','AIN2627000019435','2026-04-02',536632,96594,10733,0,'1026','AWS March usage'],
+  ['2026-05','Amazon Web Services India Private Limited','AIN2627000609619','2026-05-02',807896,145421,16158,0,'1026','AWS April usage'],
+  ['2026-05','BootLabs Technologies Private Limited','BLIK/26-27/00028','2026-05-01',320000,57600,6400,0,'1026','DevOps contractors'],
+  ['2026-05','Treta Advisors','2026-27/002','2026-05-01',125000,22500,12500,0,'1027','Business support'],
+  ['2026-06','Mispras Furnishings Private Limited','UVKA/26-27/00781','2026-05-25',10000,1800,1000,300,'1009','Office rent June'],
+  ['2026-06','Amazon Web Services India Private Limited','AIN2627001014301','2026-06-02',951914,171344,19038,0,'1026','AWS May usage'],
+  ['2026-06','BootLabs Technologies Private Limited','BLIK/26-27/00062','2026-06-02',320000,57600,6400,0,'1026','DevOps contractors May'],
+  ['2026-06','Treta Advisors','2026-27/007','2026-06-01',125000,22500,12500,0,'1027','Business support May'],
+  ['2026-06','EigenFlow LLP','INV-2026-0001','2026-05-28',200000,0,20000,600,'1027','IT consultancy May'],
+  ['2026-06','Nangia and Co LLP','MH/2627/INV/62','2026-05-20',600000,108000,60000,1800,'1027','Security assessment'],
+  ['2026-07','BootLabs Technologies Private Limited','BLIK/26-27/00087','2026-07-01',320000,57600,6400,0,'1026','DevOps contractors June'],
+  ['2026-07','Treta Advisors','2026-27/010','2026-07-01',125000,22500,12500,0,'1027','Business support June'],
+  ['2026-07','EigenFlow LLP','INV-2026-0002','2026-06-29',200000,0,20000,900,'1027','IT consultancy June'],
+  ['2026-07','Azendor Brand Consulting LLP','ABC/2026-27/007','2026-07-16',425000,76500,42500,0,'1027','Brand consulting'],
+  ['2026-07','Fab Money Technologies Private Limited','Fab-2026-27/58','2026-06-30',72000,12960,7200,324,'1027','Advisory'],
+  ['2026-07','Fab Money Technologies Private Limited','Fab-2026-27/54','2026-05-31',129000,23220,12900,774,'1027','Advisory'],
+  ['2026-08','Gupshup Technology India Private Limited','132727122683','2026-08-07',105000,18900,2100,95,'1024','Messaging'],
+  ['2026-08','MoEngage India Private Limited','INV/MO/2627/1427','2026-07-24',94600,17028,1892,85,'1026','Platform'],
+  ['2026-08','Treta Advisors','2026-27/012','2026-08-01',125000,22500,12500,0,'1027','Business support July'],
+  ['2026-08','EigenFlow LLP','INV-2026-0003','2026-07-31',200000,0,20000,900,'1027','IT consultancy July'],
+  ['2026-08','Fab Money Technologies Private Limited','Fab-2026-27/63','2026-07-31',63000,11340,6300,284,'1027','Advisory']
+];
+const ENTITIES = {
+  tech:    {name:'AXI Technologies India Private Limited', line:'AXI Technologies India · TAN BLRA51905A · TDS', rules: DEFAULT_RULES, history: HISTORY, goods: GOODS, sample: true,
+    inv: SAMPLE_INV, bankRows: SAMPLE_BANK, note: 'September 2026 Concur extract and HDFC statement (17 invoices)'},
+  digital: {name:'AXI Digital India Private Limited', line:'AXI Digital India · PAN ABDCA5184A · TDS', history: DIGITAL_HISTORY, goods: [], sample: true,
+    inv: DIGITAL_INV, bankRows: DIGITAL_BANK, note: 'September 2026 Concur extract (9 invoices) with Kotak and HDFC statements',
+    rules: [
+      {vendor:'amazon web services', section:'194J-tech'},
+      {vendor:'bootlabs', section:'194J-tech'},
+      {vendor:'treta', section:'194J-prof'},
+      {vendor:'eigenflow', section:'194J-prof', bank:'ib marketmaker'},
+      {vendor:'cerebro', section:'194J-prof', bank:'ib marketing'},
+      {vendor:'raghu m', section:'194J-prof'},
+      {vendor:'azendor', section:'194J-prof'},
+      {vendor:'gupshup', section:'194C'},
+      {vendor:'fab money', section:'194J-prof'},
+      {vendor:'moengage', section:'194J-tech'},
+      {vendor:'swai', section:'194C'},
+      {vendor:'nangia', section:'194J-prof'},
+      {vendor:'brigade hotel', section:'194C', fyOver:true, bank:'holiday'},
+      {vendor:'holiday inn', section:'194C', fyOver:true},
+      {vendor:'mispras', section:'194-I(b)'},
+      {vendor:'airtel', section:'NIL'},
+      {vendor:'anthropic', section:'NIL'},
+      {vendor:'moonshot', section:'NIL'}
+    ].map(r => ({...BLANK_RULE, ...r}))}
+};
+const ent = () => ENTITIES[currentEntity];
+
+const state = {
+  invoices: [], bank: [], source: '', rules: [], codes: {}, history: [], overrides: {},
+  settings: {period: null, payDate: null, rate: 1.5, thresholds: true}
+};
+
+function loadSample(){
+  if (!ent().sample) {
+    state.invoices = []; state.bank = [];
+    state.source = '<b>No file loaded for ' + esc(ent().name) + '.</b> Upload the Concur extract and bank statement to start.';
+    state.settings.period = null; state.settings.payDate = iso(new Date());
+    return;
+  }
+  state.invoices = ent().inv.map(r => ({vendor:r[0], number:r[1], date:toDate(r[2]), amount:r[3], tax:r[4], desc:r[5], key:norm(r[0]) + '|' + r[1]}));
+  state.bank = ent().bankRows.map(r => ({date:toDate(r[0]), narration:r[1], debit:r[2], credit:r[3], notes:r[4]}));
+  state.source = '<b>Sample loaded:</b> ' + esc(ent().note) + '. Upload a file to replace it.';
+  state.settings.period = null; state.settings.payDate = '2026-10-07';
+}
+
+function loadEntity(key){
+  currentEntity = ENTITIES[key] ? key : 'tech';
+  store('entity', currentEntity);
+  state.rules = (recall('rules8', null) || ent().rules).map(r => ({...BLANK_RULE, ...r}));
+  state.codes = Object.assign({}, DEFAULT_CODES, recall('codes2', {}));
+  state.overrides = recall('overrides', {});
+  state.view = 'cur'; state.open = new Set();
+  loadHistory(); loadSample();
+  document.querySelectorAll('#entitySeg button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.entity === currentEntity)));
+  $('#entityLine').textContent = ent().line;
+}
+
+/* ---------- file reading ---------- */
+function findHeader(rows, need){
+  for (let i = 0; i < Math.min(rows.length, 40); i++) { const h = (rows[i] || []).map(norm); if (need.every(n => h.includes(n))) return i; }
+  return -1;
+}
+function col(h, ...names){ for (const n of names) { const i = h.indexOf(n); if (i >= 0) return i; } return -1; }
+
+function parseWorkbook(wb){
+  const out = {invoices: [], bank: []};
+  wb.SheetNames.forEach(name => {
+    const rows = XLSX.utils.sheet_to_json(wb.Sheets[name], {header:1, raw:true, defval:''});
+    let hi = findHeader(rows, ['vendor name','invoice amount']);
+    if (hi >= 0) {
+      const h = rows[hi].map(norm);
+      const c = {vendor:col(h,'vendor name'), num:col(h,'invoice number'), name:col(h,'invoice name'), date:col(h,'invoice date'),
+        amt:col(h,'invoice amount','request total'), tax:col(h,'tax','tax amount','gst'), desc:col(h,'description','purpose')};
+      rows.slice(hi + 1).forEach(r => {
+        const vendor = String(r[c.vendor] ?? '').trim(); const amount = toNum(r[c.amt]);
+        if (!vendor || !amount) return;
+        const number = String((c.num >= 0 && r[c.num]) || (c.name >= 0 && r[c.name]) || '').trim();
+        out.invoices.push({vendor, number, date: c.date >= 0 ? toDate(r[c.date]) : null, amount, tax: c.tax >= 0 ? toNum(r[c.tax]) : 0,
+          desc: c.desc >= 0 ? String(r[c.desc] ?? '') : '', key: norm(vendor) + '|' + number});
+      });
+      return;
+    }
+    hi = findHeader(rows, ['narration','debit']);
+    if (hi >= 0) {
+      const h = rows[hi].map(norm);
+      const c = {date:col(h,'value date','date','txn date','transaction date'), nar:col(h,'narration'), debit:col(h,'debit','withdrawal amt'), credit:col(h,'credit','deposit amt'), notes:col(h,'notes','remarks','category')};
+      rows.slice(hi + 1).forEach(r => {
+        const narration = String(r[c.nar] ?? '').trim(); const debit = toNum(r[c.debit]); const credit = c.credit >= 0 ? toNum(r[c.credit]) : 0;
+        if (!narration && !debit && !credit) return;
+        out.bank.push({date: c.date >= 0 ? toDate(r[c.date]) : null, narration, debit, credit, notes: c.notes >= 0 ? String(r[c.notes] ?? '') : ''});
+      });
+    }
+  });
+  return out;
+}
+
+async function readFiles(files){
+  const err = $('#error'); err.hidden = true;
+  if (typeof XLSX === 'undefined') { err.textContent = 'The spreadsheet reader did not load. Check your connection and reload the page.'; err.hidden = false; return; }
+  const inv = [], bank = [], names = [];
+  for (const f of files) {
+    try {
+      const wb = XLSX.read(await f.arrayBuffer(), {type:'array', cellDates:true});
+      const p = parseWorkbook(wb); inv.push(...p.invoices); bank.push(...p.bank); names.push(f.name);
+    } catch (e) { err.textContent = 'Could not read ' + f.name + '. Save it as .xlsx or .csv and try again.'; err.hidden = false; return; }
+  }
+  if (!inv.length) {
+    err.textContent = 'No invoice list found. The file needs a sheet with "Vendor Name", "Invoice Amount" and "Tax" columns (the Concur Invoices tab).';
+    err.hidden = false; return;
+  }
+  state.invoices = inv; state.bank = bank;
+  state.source = '<b>Loaded:</b> ' + esc(names.join(', ')) + ' · ' + inv.length + ' invoices · ' + (bank.length ? bank.length + ' bank lines' : 'no bank sheet found, so the bank check is skipped');
+  state.settings.period = null; state.settings.payDate = iso(new Date()); state.view = 'cur';
+  render();
+  toast('File loaded');
+}
+
+/* ---------- classification ---------- */
+function vendorRules(vendor){ const v = norm(vendor); return state.rules.filter(r => r.vendor && v.includes(norm(r.vendor))); }
+function classify(inv){
+  const rules = vendorRules(inv.vendor); const d = norm(inv.desc);
+  const kw = rules.filter(r => r.keyword && d.includes(norm(r.keyword))).sort((a,b) => b.keyword.length - a.keyword.length)[0];
+  const rule = kw || rules.find(r => !r.keyword) || null;
+  const ov = state.overrides[inv.key];
+  return {rule, section: (ov && ov.section) || (rule && rule.section) || '', overridden: !!(ov && ov.section)};
+}
+function bankKey(vendor){
+  const r = vendorRules(vendor).find(x => x.bank); if (r) return norm(r.bank);
+  const t = norm(vendor).split(' ').filter(Boolean); if (!t.length) return '';
+  return t[0].length >= 4 ? t[0] : t.slice(0,2).join(' ');
+}
+
+/* ---------- history ---------- */
+function normHist(r){ const m = String(r.month).match(/^(\d{4})-(\d{2})/); return {...r, date: toDate(r.date), mi: m ? +m[1] * 12 + (+m[2] - 1) : 0, desc: r.desc || ''}; }
+function loadHistory(){
+  const saved = recall('history', []);
+  const savedMonths = new Set(saved.map(r => r.month));
+  state.history = ent().history.map(a => ({month:a[0], vendor:a[1], number:a[2], date:a[3], base:a[4], gst:a[5], tds:a[6], interest:a[7], code:String(a[8]), desc:a[9] || '', source:'Advisor sheet'}))
+    .filter(r => !savedMonths.has(r.month)).concat(saved).map(normHist);
+}
+const lineRate = h => h.base ? r2(h.tds / h.base * 100) : 0;
+const near = (a, b, tol = 0.05) => Math.abs(a - b) < tol;
+function ruleLdc(rule){ const x = String(rule && rule.ldc != null ? rule.ldc : '').trim(); return x === '' || isNaN(+x) ? null : +x; }
+function codeSection(code){ return Object.keys(SECTIONS).find(k => state.codes[k] && state.codes[k] === String(code)) || ''; }
+function certUsage(rule, perMI){
+  const ldc = ruleLdc(rule); if (ldc === null) return {used:0, lines:[]};
+  const from = toDate(rule.ldcFrom), v = norm(rule.vendor), kw = norm(rule.keyword);
+  const lines = state.history.filter(h => h.mi < perMI && v && norm(h.vendor).includes(v) && near(lineRate(h), ldc) && (!from || !h.date || h.date >= from) && (!kw || norm(h.desc).includes(kw)));
+  return {used: r2(sum(lines, 'base')), lines};
+}
+
+/* ---------- computation ---------- */
+function compute(){
+  const S = state.settings;
+  const invs = state.invoices.map(inv => {
+    const c = classify(inv); const sec = SECTIONS[c.section] || null;
+    const base = r2(inv.amount - inv.tax); const stat = sec ? sec.rate : 0;
+    const ldc = ruleLdc(c.rule); const from = c.rule ? toDate(c.rule.ldcFrom) : null;
+    const preCert = !!(ldc !== null && from && inv.date && inv.date < from);
+    const hasLdc = !!(sec && sec.rate > 0 && ldc !== null && ldc !== stat && !preCert);
+    const rate = hasLdc ? ldc : stat;
+    let below = false, belowNote = '';
+    if (sec && sec.rate > 0 && S.thresholds && !(c.rule && c.rule.fyOver)) {
+      if (sec.rule === 'monthly' && base <= sec.monthly) { below = true; belowNote = 'Under ₹50,000 a month'; }
+      if (sec.rule === 'single' && base <= sec.single) { below = true; belowNote = 'Under ₹30,000 per bill. Check the FY total stays under ₹1,00,000'; }
+      if (sec.rule === 'annual' && base <= sec.annual) { below = true; belowNote = 'Under ₹' + fmt(sec.annual,0) + ' for the year. Check the FY total'; }
+    }
+    return {...inv, ...c, sec, base, stat, rate, hasLdc, preCert, cert: c.rule ? String(c.rule.cert || '').trim() : '', below, belowNote,
+      ldcPart: hasLdc ? base : 0, overLimit: 0, full: 0, tds: 0, voluntary: false, interest: 0, months: 0};
+  });
+
+  const bank = state.bank.map((b, idx) => ({...b, idx, vendor: null}));
+  const groups = new Map(); invs.forEach(i => { if (!groups.has(i.vendor)) groups.set(i.vendor, []); groups.get(i.vendor).push(i); });
+  const vendors = [];
+  for (const [name, list] of groups) {
+    const key = bankKey(name);
+    const rows = bank.filter(b => !b.vendor && b.debit > 0 && key && norm(b.narration).includes(key));
+    rows.forEach(b => b.vendor = name);
+    vendors.push({name, list, rows});
+  }
+
+  // deduction month: most common month of linked bank debits, else latest invoice month
+  let autoMI = null;
+  const counts = {}; bank.filter(b => b.vendor && b.date).forEach(b => { const k = mi(b.date); counts[k] = (counts[k] || 0) + 1; });
+  const ks = Object.keys(counts); if (ks.length) autoMI = +ks.sort((a,b) => counts[b] - counts[a])[0];
+  if (autoMI === null) { const ds = invs.filter(i => i.date).map(i => mi(i.date)); autoMI = ds.length ? Math.max(...ds) : mi(new Date()); }
+  let perMI = autoMI;
+  if (S.period) { const m = S.period.match(/^(\d{4})-(\d{2})$/); if (m) perMI = +m[1] * 12 + (+m[2] - 1); }
+  const py = Math.floor(perMI / 12), pm = perMI % 12;
+  const due = pm === 2 ? new Date(py, 3, 30) : new Date(py, pm + 1, 7);
+  const payDate = toDate(S.payDate) || new Date();
+  const late = payDate > due; const payMI = mi(payDate);
+
+  // certificate limits: usage before this month comes from the rule, else from earlier months
+  const certInfo = new Map();
+  invs.slice().sort((a,b) => (a.date||0) - (b.date||0)).forEach(i => {
+    if (!i.hasLdc || !i.rule) return;
+    const limit = toNum(i.rule.ldcLimit); if (!limit) return;
+    if (!certInfo.has(i.rule)) {
+      const manual = String(i.rule.ldcUsed ?? '').trim();
+      const start = manual !== '' ? toNum(manual) : certUsage(i.rule, perMI).used;
+      certInfo.set(i.rule, {limit, start, auto: manual === '', running: start});
+    }
+    const ci = certInfo.get(i.rule);
+    i.ldcPart = Math.min(i.base, Math.max(0, ci.limit - ci.running)); i.overLimit = r2(i.base - i.ldcPart); ci.running += i.base;
+  });
+  invs.forEach(i => { i.full = r2((i.ldcPart * i.rate + (i.base - i.ldcPart) * i.stat) / 100); i.tds = i.below ? 0 : i.full; });
+
+  vendors.forEach(v => {
+    const list = v.list, rows = v.rows;
+    v.total = r2(sum(list, 'amount')); v.paid = r2(sum(rows, 'debit'));
+    const A = r2(sum(list, 'tds')); const B = r2(sum(list, i => i.sec && i.sec.rate > 0 ? i.full : 0));
+    v.D = rows.length ? r2(v.total - v.paid) : null; v.excess = 0; v.short = 0;
+    if (v.D === null) v.status = state.bank.length ? 'nobank' : 'nofile';
+    else if (Math.abs(v.D - A) <= TOL) v.status = 'match';
+    else if (B !== A && Math.abs(v.D - B) <= TOL) { list.forEach(i => { if (i.below && i.full > 0) { i.tds = i.full; i.voluntary = true; } }); v.status = 'voluntary'; }
+    else if (v.D > A) { v.excess = r2(v.D - A); v.status = 'excess'; }
+    else { v.short = r2(A - v.D); v.status = 'short'; }
+    const bySec = {}; list.forEach(i => { if (i.sec && i.sec.rate > 0) bySec[i.section] = (bySec[i.section] || 0) + i.base; });
+    v.primary = Object.keys(bySec).sort((a,b) => bySec[b] - bySec[a])[0] || '';
+    v.tds = r2(sum(list, 'tds'));
+  });
+
+  invs.forEach(i => {
+    if (i.tds > 0 && i.date) {
+      const imi = mi(i.date);
+      if (imi < perMI || late) { i.months = Math.max(1, payMI - imi + 1); i.interest = Math.round(Math.round(i.tds) * S.rate / 100 * i.months); }
+    }
+  });
+
+  const secMap = new Map();
+  const add = (k) => { if (!secMap.has(k)) secMap.set(k, {key:k, tds:0, interest:0, excess:0, count:0, vendors:new Set()}); return secMap.get(k); };
+  invs.forEach(i => { if (i.tds > 0) { const s = add(i.section); s.tds += i.tds; s.interest += i.interest; s.count++; s.vendors.add(i.vendor); } });
+  vendors.forEach(v => { if (v.excess > 0 && v.primary) { const s = add(v.primary); s.tds += v.excess; s.excess += v.excess; s.vendors.add(v.name); } });
+  const order = Object.keys(SECTIONS);
+  const challan = [...secMap.values()].sort((a,b) => order.indexOf(a.key) - order.indexOf(b.key))
+    .map(s => ({...s, tdsR: Math.round(s.tds), total: Math.round(s.tds) + s.interest}));
+  const totTds = sum(challan, 'tdsR'), totInt = sum(challan, 'interest');
+  const withheld = r2(sum(vendors.filter(v => v.D !== null), 'D'));
+  const ldcRisk = r2(sum(invs.filter(i => i.hasLdc && !i.below && !i.cert), i => r2(i.ldcPart * (i.stat - i.rate) / 100)));
+  const other = bank.filter(b => !b.vendor && b.debit > 0);
+  return {invs, vendors, challan, totTds, totInt, withheld, ldcRisk, other, perMI, autoMI, due, payDate, late, certInfo};
+}
+
+/* ---------- earlier-month checks ---------- */
+function priorChecks(perMI){
+  const out = []; const prior = state.history.filter(h => h.mi < perMI);
+  if (!prior.length) return out;
+  const nums = list => list.map(h => h.number).join(', ');
+  state.rules.forEach(rule => {
+    const ldc = ruleLdc(rule); if (ldc === null || !rule.vendor) return;
+    const v = norm(rule.vendor), limit = toNum(rule.ldcLimit), from = toDate(rule.ldcFrom);
+    const u = certUsage(rule, perMI);
+    if (limit) {
+      const left = limit - u.used;
+      out.push([left <= 0 ? 'bad' : (left < limit * 0.2 ? 'warn' : 'info'), '<b>' + esc(rule.vendor) + ' certificate ' + esc(rule.cert || '') + '</b>: ' + rs(u.used,0) + ' used before ' + esc(monthLabel(perMI)) +
+        ' (' + u.lines.length + ' invoices at ' + ldc + '%' + (rule.keyword ? ', identified as ' + esc(rule.keyword) : '') + '). ' + (left > 0 ? rs(left,0) + ' of ' + rs(limit,0) + ' was left at the start of ' + esc(monthLabel(perMI)) + ' (the certificates table also deducts this month).' : 'The ' + rs(limit,0) + ' limit was used up before ' + esc(monthLabel(perMI)) + '; further bills are at the full rate.')]);
+    }
+    if (from) {
+      const pre = prior.filter(h => norm(h.vendor).includes(v) && h.date && h.date < from && near(lineRate(h), ldc));
+      if (pre.length) out.push(['bad', '<b>' + esc(rule.vendor) + '</b>: ' + pre.length + ' invoices dated before the certificate start (' + fdate(from) + ') were deducted at ' + ldc + '%: ' + esc(nums(pre)) + '.']);
+    }
+    if (rule.keyword) {
+      const kw = norm(rule.keyword);
+      const unclear = prior.filter(h => norm(h.vendor).includes(v) && near(lineRate(h), ldc) && !norm(h.desc).includes(kw));
+      if (unclear.length) {
+        const fallback = state.rules.find(r => r.vendor && norm(r.vendor) === v && !r.keyword);
+        const fRate = fallback && SECTIONS[fallback.section] ? SECTIONS[fallback.section].rate : null;
+        const b = sum(unclear, 'base');
+        out.push(['warn', '<b>' + esc(rule.vendor) + '</b>: ' + unclear.length + ' invoices (' + rs(b,0) + ' before GST) were deducted at ' + ldc + '% but are not identified as ' + esc(rule.keyword) + ': ' + esc(nums(unclear)) +
+          '. The certificate covers ' + esc(rule.keyword) + ' only.' + (fRate ? ' If they are services, ' + rs(b * (fRate - ldc) / 100, 0) + ' more TDS was due at ' + fRate + '%.' : '')]);
+      }
+    }
+  });
+  const byVendor = new Map(); prior.forEach(h => { if (!byVendor.has(h.vendor)) byVendor.set(h.vendor, []); byVendor.get(h.vendor).push(h); });
+  byVendor.forEach((lines, name) => {
+    const rules = vendorRules(name);
+    if (!rules.length) {
+      const odd = lines.filter(h => h.tds > 0 && ![0.1,1,2,5,10,20].some(s => near(lineRate(h), s, 0.03)));
+      if (odd.length) out.push(['warn', '<b>' + esc(name) + '</b>: deducted at ' + [...new Set(odd.map(lineRate))].join('%, ') + '% (' + esc(nums(odd)) + '), which is not a standard rate.']);
+      return;
+    }
+    if (rules.some(r => r.keyword)) return;
+    const main = rules[0]; const sec = SECTIONS[main.section]; if (!sec || !sec.rate) return;
+    const code = state.codes[main.section];
+    const codes = [...new Set(lines.map(h => h.code))].filter(c => c && code && c !== code);
+    if (codes.length) out.push(['warn', '<b>' + esc(name) + '</b>: reported under code ' + esc(codes.join(', ')) + ' in earlier months, but the vendor rule treats it as ' + esc(secLabel(main.section)) + ' (code ' + esc(code) + ').']);
+    const ldc = ruleLdc(main), from = toDate(main.ldcFrom);
+    const under = lines.filter(h => h.tds >= 0 && lineRate(h) < sec.rate - 0.05 && !(ldc !== null && near(lineRate(h), ldc) && (!from || !h.date || h.date >= from)));
+    if (under.length) {
+      const short = sum(under, h => h.base * (sec.rate - lineRate(h)) / 100);
+      out.push(['bad', '<b>' + esc(name) + '</b>: ' + under.length + ' invoices were deducted at ' + [...new Set(under.map(lineRate))].join('%, ') + '% with no certificate cover (' + esc(nums(under)) + '). At the ' + sec.rate + '% rate for ' + esc(secLabel(main.section)) +
+        ', ' + rs(short,0) + ' more TDS was due. If a certificate covers these, add it in Vendor rules.']);
+    }
+  });
+
+  // Regular vendors that drop out: present in 3+ months, missing in a later month up to this one
+  const present = new Map();
+  const mark = (v, m) => { const k = norm(v).split(' ').slice(0, 2).join(' '); if (!present.has(k)) present.set(k, {name: v, months: new Set()}); present.get(k).months.add(m); };
+  prior.forEach(h => mark(h.vendor, h.mi));
+  ((M && M.invs) || []).forEach(i => mark(i.vendor, perMI));
+  present.forEach(p => {
+    if (p.months.size < 3) return;
+    const first = Math.min(...p.months), gaps = [];
+    for (let m = first; m <= perMI; m++) if (!p.months.has(m)) gaps.push(monthLabel(m));
+    if (gaps.length) out.push(['warn', '<b>' + esc(p.name) + '</b> is billed most months but has no invoice in ' + esc(gaps.join(', ')) + '. Check whether invoices were missed or billed together later.']);
+  });
+
+  // TDS on 194-I rent under the Rs 50,000 a month limit
+  prior.filter(h => (h.code === state.codes['194-I(a)'] || h.code === state.codes['194-I(b)']) && h.tds > 0 && h.base <= 50000).forEach(h =>
+    out.push(['info', '<b>' + esc(h.vendor) + ' ' + esc(h.number) + '</b>: rent of ' + rs(h.base,0) + ' is under the ₹50,000 a month limit, so the ' + rs(h.tds,0) + ' TDS was not required.']));
+
+  // Invoices from the previous financial year carried into this year's challans
+  const fyStart = fyStartOf(perMI);
+  const old = prior.filter(h => h.date && mi(h.date) < fyStart);
+  if (old.length) out.push(['warn', esc(old.length + ' invoice' + (old.length > 1 ? 's' : '')) + ' dated in the previous financial year (' + esc(nums(old)) + ', TDS ' + rs(sum(old, 'tds'),0) +
+    ') were included in this year\'s challans. Their challan must be for the earlier year and they belong in that year\'s Q4 return.']);
+
+  // Interest: 1.5% a month counting part months, from invoice month to the challan month (7th of the month after the summary)
+  const off = [];
+  prior.filter(h => h.date && h.tds > 0).forEach(h => {
+    const months = (h.mi + 1) - mi(h.date) + 1;
+    const late = mi(h.date) < h.mi;
+    const exp = late ? Math.round(h.tds * 0.015 * months) : 0;
+    const got = h.interest || 0;
+    if (Math.abs(exp - got) > Math.max(50, exp * 0.1)) off.push({h, exp, got, months});
+  });
+  if (off.length) out.push(['warn', 'Interest looks off on ' + off.length + ' line' + (off.length > 1 ? 's' : '') + ' (1.5% a month, part months counted, to a challan paid by the 7th): ' +
+    off.map(o => esc(o.h.number) + ' charged ' + rs(o.got,0) + ', expected about ' + rs(o.exp,0) + ' for ' + o.months + ' months').join('; ') + '.']);
+  return out;
+}
+
+/* ---------- rendering ---------- */
+let M = null;
+function chip(cls, text){ return '<span class="chip ' + cls + '">' + esc(text) + '</span>'; }
+function secLabel(k){ return k === '194-I(a)' || k === '194-I(b)' ? k : String(k).replace('-tech',' (technical)').replace('-prof',' (professional)').replace('-ind',' (ind/HUF)'); }
+const fyStartOf = m => m - ((m % 12) - 3 + 12) % 12;
+function fyLabel(m){ const y = Math.floor(fyStartOf(m) / 12); return 'FY ' + y + '-' + String((y + 1) % 100).padStart(2,'0'); }
+function vendorDisplay(text){ const t = norm(text); const hit = state.invoices.find(i => norm(i.vendor).includes(t)) || state.history.find(h => norm(h.vendor).includes(t)); return hit ? hit.vendor : text; }
+
+function curLines(){
+  const out = M.invs.filter(i => i.tds > 0).map(i => ({mi:M.perMI, code:state.codes[i.section] || '', section:i.section, vendor:i.vendor, number:i.number, base:i.base, tds:i.tds, interest:i.interest}));
+  M.vendors.filter(v => v.excess > 0 && v.primary).forEach(v => out.push({mi:M.perMI, code:state.codes[v.primary] || '', section:v.primary, vendor:v.name, number:'Excess deducted by AP', base:0, tds:v.excess, interest:0}));
+  return out;
+}
+function histLines(m){ return state.history.filter(h => h.mi === m).map(h => ({mi:m, code:h.code || '', section:codeSection(h.code), vendor:h.vendor, number:h.number, base:h.base, tds:h.tds, interest:h.interest || 0})); }
+function fyMonths(){ const s = fyStartOf(M.perMI); const set = new Set(state.history.filter(h => h.mi >= s && h.mi < M.perMI).map(h => h.mi)); set.add(M.perMI); return [...set].sort((a,b) => a - b); }
+const isCurView = () => state.view === 'cur' || state.view === M.perMI;
+function viewLines(){
+  if (state.view === 'fy') return fyMonths().flatMap(m => m === M.perMI ? curLines() : histLines(m));
+  return isCurView() ? curLines() : histLines(state.view);
+}
+function byCode(lines){
+  const map = new Map();
+  lines.forEach(l => {
+    const key = l.code || ('sec-' + l.section);
+    if (!map.has(key)) map.set(key, {key, code:l.code, section:l.section, tds:0, interest:0, vendors:new Map()});
+    const c = map.get(key); c.tds += l.tds; c.interest += l.interest; if (!c.section && l.section) c.section = l.section;
+    if (!c.vendors.has(l.vendor)) c.vendors.set(l.vendor, {vendor:l.vendor, tds:0, interest:0, count:0, months:new Set()});
+    const v = c.vendors.get(l.vendor); v.tds += l.tds; v.interest += l.interest; v.count++; v.months.add(l.mi);
+  });
+  return [...map.values()].map(c => ({...c, tdsR:Math.round(c.tds), interestR:Math.round(c.interest)}))
+    .sort((a,b) => String(a.code || 'zz').localeCompare(String(b.code || 'zz')));
+}
+
+function render(){
+  M = compute();
+  const S = state.settings;
+  $('#source').innerHTML = state.source;
+  $('#period').value = S.period || (Math.floor(M.autoMI/12) + '-' + String(M.autoMI%12 + 1).padStart(2,'0'));
+  $('#payDate').value = S.payDate || iso(new Date());
+  $('#rate').value = String(S.rate);
+  $('#thr').checked = S.thresholds;
+
+  const months = fyMonths();
+  if (typeof state.view === 'number' && !months.includes(state.view)) state.view = 'cur';
+  $('#view').innerHTML = months.map(m => '<option value="' + m + '"' + ((state.view === m || (state.view === 'cur' && m === M.perMI)) ? ' selected' : '') + '>' +
+      esc(monthLabel(m)) + (m === M.perMI ? ' · uploaded file' : '') + '</option>').join('') +
+    '<option value="fy"' + (state.view === 'fy' ? ' selected' : '') + '>' + esc(fyLabel(M.perMI)) + ' to date</option>';
+  const cur = isCurView();
+  const viewName = state.view === 'fy' ? fyLabel(M.perMI) + ' to date (' + monthLabel(fyStartOf(M.perMI)) + ' to ' + monthLabel(M.perMI) + ')' : monthLabel(cur ? M.perMI : state.view);
+  $('#payDate').disabled = !cur;
+
+  const codes = byCode(viewLines()); M.viewCodes = codes; M.viewName = viewName;
+  const totT = sum(codes, 'tdsR'), totI = sum(codes, 'interestR');
+
+  let meta;
+  if (cur) meta = (M.late ? chip('bad', 'Late: was due ' + fdate(M.due)) : chip('ok', 'Due ' + fdate(M.due))) + '<span class="dim">Worked out from the uploaded file</span>';
+  else if (state.view === 'fy') meta = '<span class="dim">' + months.length + ' months. Earlier months as per the advisor\'s summaries.</span>';
+  else meta = '<span class="dim">As per the advisor\'s summary for the month</span>';
+  $('#total').innerHTML = '<div class="part"><span class="eyebrow">' + (state.view === 'fy' ? 'Challans · ' : 'Challans to pay · ') + esc(viewName) + '</span><span class="big">' + rs(totT + totI, 0) + '</span></div>' +
+    '<div class="part"><span class="eyebrow">TDS</span><span class="mid">' + rs(totT, 0) + '</span></div>' +
+    '<div class="part"><span class="eyebrow">Interest</span><span class="mid">' + rs(totI, 0) + '</span></div>' +
+    '<div class="meta">' + meta + '</div>';
+
+  $('#codesTitle').textContent = 'Challans by code · ' + viewName;
+  let h = '<table><thead><tr><th>Code</th><th>Section</th><th class="n">TDS</th><th class="n">Interest</th><th class="n">Total</th></tr></thead>';
+  if (!codes.length) h += '<tbody><tr><td colspan="5" class="empty">No TDS for this period.</td></tr></tbody>';
+  codes.forEach(c => {
+    const open = state.open.has(c.key); const id = 'drill-' + c.key.replace(/[^a-z0-9]/gi, '_');
+    const vendors = [...c.vendors.values()].sort((a,b) => b.tds - a.tds);
+    const fy = state.view === 'fy';
+    h += '<tbody><tr class="code-row"><td><button class="code-btn" type="button" data-code="' + esc(c.key) + '" aria-expanded="' + open + '" aria-controls="' + id + '"><span class="caret"></span><span class="code">' + esc(c.code || 'no code') + '</span></button></td>' +
+      '<td>' + (c.section && SECTIONS[c.section] ? '<b>' + esc(secLabel(c.section)) + '</b> <span class="dim">' + esc(SECTIONS[c.section].name) + '</span>' : '<span class="dim">Code not in the section list</span>') +
+      '<div class="dim">' + vendors.length + ' vendor' + (vendors.length > 1 ? 's' : '') + '</div></td>' +
+      '<td class="n">' + fmt(c.tdsR,0) + '</td><td class="n">' + fmt(c.interestR,0) + '</td><td class="n"><b>' + fmt(c.tdsR + c.interestR,0) + '</b></td></tr>' +
+      '<tr class="drill" id="' + id + '"' + (open ? '' : ' hidden') + '><td colspan="5"><div class="scroll"><table><thead><tr><th>Vendor</th><th class="n">' + (fy ? 'Invoices · months' : 'Invoices') + '</th><th class="n">TDS</th><th class="n">Interest</th><th class="n">Total</th></tr></thead><tbody>' +
+      vendors.map(v => '<tr><td>' + esc(v.vendor) + '</td><td class="n">' + v.count + (fy ? ' · ' + v.months.size : '') + '</td><td class="n">' + fmt(v.tds) + '</td><td class="n">' + fmt(v.interest,0) + '</td><td class="n">' + fmt(v.tds + v.interest) + '</td></tr>').join('') +
+      '</tbody></table></div></td></tr></tbody>';
+  });
+  h += '<tfoot><tr><td colspan="2">Total</td><td class="n">' + fmt(totT,0) + '</td><td class="n">' + fmt(totI,0) + '</td><td class="n">' + fmt(totT + totI,0) + '</td></tr></tfoot></table>';
+  $('#codesTable').innerHTML = h;
+
+  renderCerts(); renderGoods(); renderDiffs(); renderInvoices(); renderBank();
+  const pc = priorChecks(M.perMI);
+  $('#priorCount').textContent = pc.length ? '· ' + pc.length + ' to review' : '';
+  $('#prior').innerHTML = (pc.length ? pc : [['ok', state.history.some(h => h.mi < M.perMI) ? 'No issues found in earlier months.' : 'No earlier months loaded.']]).map(([c, t]) => '<li class="' + c + '"><span class="mark"></span><span>' + t + '</span></li>').join('');
+  renderRules(); renderCodes();
+}
+
+function renderGoods(){
+  const LIMIT = 5000000, fyS = fyStartOf(M.perMI);
+  const rows = ent().goods.map(g => { const m = g[0].match(/^(\d{4})-(\d{2})/); return {mi: +m[1] * 12 + (+m[2] - 1), vendor:g[1], doc:g[2], date:toDate(g[3]), value:g[4], note:g[5]}; })
+    .filter(g => g.mi >= fyS && g.mi <= M.perMI);
+  const by = new Map(); rows.forEach(g => { if (!by.has(g.vendor)) by.set(g.vendor, []); by.get(g.vendor).push(g); });
+  const vendors = [...by.entries()].map(([v, list]) => ({v, list, total: sum(list, 'value')})).sort((a,b) => b.total - a.total);
+  let h = '<table><thead><tr><th>Seller</th><th class="n">Purchases this FY</th><th class="n">Left before ₹50 lakh</th><th class="n">TDS due at 0.1%</th><th>Status</th></tr></thead>';
+  vendors.forEach(x => {
+    const left = LIMIT - x.total, over = Math.max(0, -left), pct = x.total / LIMIT;
+    const st = over > 0 ? chip('bad', 'Over the limit: deduct 0.1%') : pct >= 0.8 ? chip('warn', Math.round(pct * 100) + '% of limit') : chip('ok', Math.round(pct * 100) + '% of limit');
+    const key = 'g-' + x.v; const open = state.open.has(key); const id = 'drill-g' + x.v.replace(/[^a-z0-9]/gi, '_');
+    h += '<tbody><tr class="code-row"><td><button class="code-btn" type="button" data-code="' + esc(key) + '" aria-expanded="' + open + '" aria-controls="' + id + '"><span class="caret"></span>' + esc(x.v) + '</button></td>' +
+      '<td class="n">' + fmt(x.total, 0) + '</td><td class="n">' + (left > 0 ? fmt(left, 0) : '—') + '</td><td class="n">' + (over ? fmt(over * 0.001) : '—') + '</td><td>' + st + '</td></tr>' +
+      '<tr class="drill" id="' + id + '"' + (open ? '' : ' hidden') + '><td colspan="5"><div class="scroll"><table><thead><tr><th>Document</th><th>Date</th><th>What</th><th class="n">Value before GST</th></tr></thead><tbody>' +
+      x.list.map(g => '<tr><td>' + esc(g.doc) + '</td><td class="num">' + fdate(g.date) + '</td><td class="dim">' + esc(g.note) + '</td><td class="n">' + fmt(g.value, 0) + '</td></tr>').join('') +
+      '</tbody></table></div></td></tr></tbody>';
+  });
+  if (!vendors.length) h += '<tbody><tr><td colspan="5" class="empty">No goods purchases recorded for this entity yet.</td></tr></tbody>';
+  h += '</table>' + (currentEntity === 'tech' ? '<p class="empty" style="font-size:.8rem">Onlineteksupport excludes the March 2026 laptop order; add it if it was paid in this FY. Proformas are counted at order value until the tax invoice arrives.</p>' : '');
+  $('#goods').innerHTML = h;
+}
+
+function renderCerts(){
+  const fyS = fyStartOf(M.perMI);
+  const rows = state.rules.filter(r => r.vendor && ruleLdc(r) !== null).map(r => {
+    const v = norm(r.vendor), ldc = ruleLdc(r), limit = toNum(r.ldcLimit);
+    const ci = M.certInfo.get(r); const manual = String(r.ldcUsed ?? '').trim();
+    const before = ci ? ci.start : (manual !== '' ? toNum(manual) : certUsage(r, M.perMI).used);
+    const mine = M.invs.filter(i => i.rule === r);
+    const thisMonth = r2(sum(mine.filter(i => i.hasLdc), 'ldcPart'));
+    const over = r2(sum(mine, 'overLimit'));
+    const paidFY = r2(sum(state.history.filter(h => h.mi >= fyS && h.mi < M.perMI && norm(h.vendor).includes(v)), 'base') + sum(M.invs.filter(i => norm(i.vendor).includes(v)), 'base'));
+    const used = r2(before + thisMonth);
+    return {r, ldc, limit, before, thisMonth, over, paidFY, used, left: limit ? r2(limit - used) : null};
+  });
+  $('#certNote').textContent = rows.length ? fyLabel(M.perMI) + ' up to ' + monthLabel(M.perMI) + '. Amounts before GST.' : '';
+  if (!rows.length) { $('#certs').innerHTML = '<p class="empty">No certificates recorded. Add a lower rate in Vendor rules.</p>'; return; }
+  let h = '<table><thead><tr><th>Vendor</th><th>Certificate</th><th class="n">Limit</th><th class="n">Used before ' + esc(monthLabel(M.perMI)) + '</th><th class="n">Used in ' + esc(monthLabel(M.perMI)) +
+    '</th><th class="n">Left</th><th class="n">Paid to vendor this FY</th><th>Status</th></tr></thead><tbody>';
+  rows.forEach(x => {
+    const r = x.r; let st;
+    if (!r.cert) st = chip('warn', 'No certificate number');
+    else if (x.over > 0) st = chip('bad', rs(x.over,0) + ' over the limit');
+    else if (x.limit && x.left <= 0) st = chip('bad', 'Limit used up');
+    else if (x.limit && x.left < x.limit * 0.2) st = chip('warn', Math.round(x.used / x.limit * 100) + '% used');
+    else if (x.limit) st = chip('ok', Math.round(x.used / x.limit * 100) + '% used');
+    else st = chip('info', 'No limit entered');
+    h += '<tr><td>' + esc(vendorDisplay(r.vendor)) + (r.keyword ? '<div class="dim">' + esc(r.keyword) + ' only</div>' : '') + '</td>' +
+      '<td><span class="code">' + esc(r.cert || '—') + '</span><div class="dim">' + esc(secLabel(r.section)) + ' at ' + x.ldc + '%' + (r.ldcFrom ? ' from ' + fdate(toDate(r.ldcFrom)) : '') + '</div></td>' +
+      '<td class="n">' + (x.limit ? fmt(x.limit,0) : '—') + '</td><td class="n">' + fmt(x.before,0) + '</td><td class="n">' + fmt(x.thisMonth,0) + '</td>' +
+      '<td class="n">' + (x.left === null ? '—' : fmt(Math.max(0, x.left),0)) + '</td><td class="n">' + fmt(x.paidFY,0) + '</td><td>' + st + '</td></tr>';
+  });
+  $('#certs').innerHTML = h + '</tbody></table>';
+}
+
+function renderDiffs(){
+  $('#diffTitle').textContent = 'Differences to address · ' + monthLabel(M.perMI);
+  const rows = [];
+  M.vendors.forEach(v => {
+    const over = r2(sum(v.list, 'overLimit')); const why = [];
+    if (over > 0) why.push(rs(over,0) + ' is over the certificate limit, so the full rate applies');
+    const hasCertRule = vendorRules(v.name).some(r => ruleLdc(r) !== null);
+    if (hasCertRule && v.list.some(i => i.hasLdc) && v.list.some(i => !i.hasLdc && i.tds > 0)) why.push('some bills are not covered by the certificate and need the normal rate');
+    if (v.status === 'short') rows.push(['bad', v.name, 'AP deducted ' + rs(v.D) + '; ' + rs(v.tds) + ' is due' + (why.length ? ': ' + why.join('; ') : '') + '. AXI pays the difference and recovers it from the next payment.', v.short]);
+    if (v.status === 'excess') rows.push(['warn', v.name, 'AP deducted ' + rs(v.D) + '; only ' + rs(v.tds) + ' is due. The extra is still deposited because the vendor will claim it.', v.excess]);
+    if (v.status === 'nobank') rows.push(['warn', v.name, 'No payment found in the bank file, so TDS is worked out from the invoices only.', null]);
+  });
+  M.invs.filter(i => !i.sec).forEach(i => rows.push(['bad', i.vendor, 'Invoice ' + i.number + ' has no TDS section. Set one in Invoice detail or Vendor rules.', null]));
+  const noCert = new Map(); M.invs.filter(i => i.hasLdc && !i.cert).forEach(i => noCert.set(i.vendor, (noCert.get(i.vendor) || 0) + r2(i.ldcPart * (i.stat - i.rate) / 100)));
+  noCert.forEach((amt, v) => rows.push(['warn', v, 'Lower rate used but no certificate number is recorded. Without a certificate this much more is due.', amt]));
+  if (M.late) rows.push(['bad', 'All codes', 'The payment date is after the due date of ' + fdate(M.due) + ', so interest applies to every line.', null]);
+  if (!rows.length) { $('#diffs').innerHTML = '<p class="empty">No differences. AP deductions match the TDS due for every vendor.</p>'; return; }
+  let h = '<table><thead><tr><th>Vendor</th><th>What to address</th><th class="n">Amount</th></tr></thead><tbody>';
+  rows.forEach(([s, v, t, a]) => { h += '<tr class="sev-' + s + '"><td>' + esc(v) + '</td><td>' + esc(t) + '</td><td class="n">' + (a === null ? '—' : fmt(a)) + '</td></tr>'; });
+  const short = sum(M.vendors, 'short');
+  h += '</tbody>' + (short ? '<tfoot><tr><td colspan="2">Short deducted, paid by AXI this month</td><td class="n">' + fmt(short) + '</td></tr></tfoot>' : '') + '</table>';
+  $('#diffs').innerHTML = h;
+}
+
+function renderInvoices(){
+  $('#invCount').textContent = '· ' + M.invs.length + ' invoices, ' + monthLabel(M.perMI);
+  const opts = sel => '<option value=""' + (sel ? '' : ' selected') + '>Choose section</option>' + Object.keys(SECTIONS).map(k => '<option value="' + esc(k) + '"' + (k === sel ? ' selected' : '') + '>' + esc(secLabel(k) + ' · ' + SECTIONS[k].rate + '%') + '</option>').join('');
+  let h = '<table><thead><tr><th>Invoice</th><th>Date</th><th>Description</th><th class="n">Before GST</th><th class="n">GST</th><th>Section</th><th class="n">Rate</th><th class="n">TDS</th><th class="n">Interest</th><th>Notes</th></tr></thead><tbody>';
+  M.vendors.forEach(v => {
+    h += '<tr class="grp"><td colspan="10">' + esc(v.name) + '</td></tr>';
+    v.list.slice().sort((a,b) => (a.date||0) - (b.date||0)).forEach(i => {
+      const notes = [];
+      if (i.hasLdc) notes.push(chip(i.cert ? 'info' : 'warn', i.cert ? 'Certificate ' + i.cert : 'Lower rate, no certificate'));
+      if (i.overLimit > 0) notes.push(chip('bad', rs(i.overLimit, 0) + ' over certificate limit'));
+      if (i.preCert) notes.push(chip('warn', 'Dated before certificate start'));
+      if (i.below && !i.voluntary) notes.push(chip('info', i.belowNote));
+      if (i.voluntary) notes.push(chip('info', 'Under limit, deducted anyway'));
+      if (i.months) notes.push(chip('warn', i.months + ' month' + (i.months > 1 ? 's' : '') + ' interest'));
+      if (i.overridden) notes.push(chip('info', 'Section set manually'));
+      if (!i.sec) notes.push(chip('bad', 'No section'));
+      h += '<tr><td>' + esc(i.number) + '</td><td class="num">' + fdate(i.date) + '</td><td class="desc">' + esc(i.desc) + '</td><td class="n">' + fmt(i.base) + '</td><td class="n">' + fmt(i.tax) +
+        '</td><td><select id="sec-' + esc(i.key) + '" data-key="' + esc(i.key) + '" aria-label="TDS section for ' + esc(i.number) + '">' + opts(i.section) + '</select></td><td class="n">' + (i.sec ? (i.overLimit > 0 ? 'mixed' : i.rate + '%') : '—') +
+        '</td><td class="n">' + fmt(i.tds) + '</td><td class="n">' + (i.interest ? fmt(i.interest,0) : '—') + '</td><td><div class="chips">' + notes.join('') + '</div></td></tr>';
+    });
+  });
+  $('#invoices').innerHTML = h + '</tbody></table>';
+}
+
+function renderBank(){
+  const kind = b => { const n = norm(b.narration), t = norm(b.notes);
+    if (t.includes('expense')) return chip('info', 'Employee expense claim');
+    if (n.includes('cbdt')) return chip('info', 'Tax payment');
+    if (n.includes('multiple payees')) return chip('info', 'Bulk payout, likely payroll');
+    if (n.includes('cgst') || n.includes('sgst')) return chip('info', 'GST on bank charges');
+    if (n.includes('pension')) return chip('info', 'Pension (NPS)');
+    if (t.includes('invoice')) return chip('warn', 'Marked invoice but no Concur match');
+    return chip('info', 'Other'); };
+  $('#bankCount').textContent = state.bank.length ? '· ' + M.other.length + ' lines' : '· no bank sheet';
+  let h = '<table><thead><tr><th>Date</th><th>Narration</th><th class="n">Debit</th><th>Type</th></tr></thead><tbody>';
+  if (!state.bank.length) h += '<tr><td colspan="4">No bank sheet loaded.</td></tr>';
+  else if (!M.other.length) h += '<tr><td colspan="4">Every debit is linked to an invoice.</td></tr>';
+  M.other.forEach(b => { h += '<tr><td class="num">' + fdate(b.date) + '</td><td class="desc">' + esc(b.narration) + '</td><td class="n">' + fmt(b.debit) + '</td><td>' + kind(b) + '</td></tr>'; });
+  $('#bank').innerHTML = h + '</tbody></table>';
+}
+
+function renderRules(){
+  const secOpts = sel => Object.keys(SECTIONS).map(k => '<option value="' + esc(k) + '"' + (k === sel ? ' selected' : '') + '>' + esc(secLabel(k)) + '</option>').join('');
+  let h = '<thead><tr><th>Vendor name contains</th><th>Description contains</th><th>Section</th><th>Lower rate %</th><th>Certificate no.</th><th>Valid from</th><th>Certificate limit ₹</th><th>Used before this month ₹</th><th>Over yearly limit</th><th>Bank narration contains</th><th></th></tr></thead><tbody>';
+  state.rules.forEach((r, i) => {
+    h += '<tr>' +
+      '<td><input type="text" id="r' + i + '-vendor" data-i="' + i + '" data-f="vendor" value="' + esc(r.vendor) + '" aria-label="Vendor text"></td>' +
+      '<td><input type="text" id="r' + i + '-keyword" data-i="' + i + '" data-f="keyword" value="' + esc(r.keyword) + '" placeholder="any" aria-label="Description text"></td>' +
+      '<td><select id="r' + i + '-section" data-i="' + i + '" data-f="section" aria-label="Section">' + secOpts(r.section) + '</select></td>' +
+      '<td><input type="number" step="0.1" min="0" id="r' + i + '-ldc" data-i="' + i + '" data-f="ldc" value="' + esc(r.ldc) + '" placeholder="—" aria-label="Lower deduction rate"></td>' +
+      '<td><input type="text" id="r' + i + '-cert" data-i="' + i + '" data-f="cert" value="' + esc(r.cert) + '" placeholder="not recorded" aria-label="Certificate number"></td>' +
+      '<td><input type="date" id="r' + i + '-ldcFrom" data-i="' + i + '" data-f="ldcFrom" value="' + esc(r.ldcFrom) + '" aria-label="Certificate valid from"></td>' +
+      '<td><input type="number" min="0" id="r' + i + '-ldcLimit" data-i="' + i + '" data-f="ldcLimit" value="' + esc(r.ldcLimit) + '" placeholder="—" style="width:120px" aria-label="Certificate limit"></td>' +
+      '<td><input type="number" min="0" id="r' + i + '-ldcUsed" data-i="' + i + '" data-f="ldcUsed" value="' + esc(r.ldcUsed) + '" placeholder="auto" style="width:120px" aria-label="Amount already used against the certificate"></td>' +
+      '<td><input type="checkbox" id="r' + i + '-fyOver" data-i="' + i + '" data-f="fyOver"' + (r.fyOver ? ' checked' : '') + ' aria-label="Vendor is already over the yearly limit"></td>' +
+      '<td><input type="text" id="r' + i + '-bank" data-i="' + i + '" data-f="bank" value="' + esc(r.bank) + '" placeholder="auto" aria-label="Bank narration text"></td>' +
+      '<td><button class="btn small" type="button" data-del="' + i + '">Remove</button></td></tr>';
+  });
+  $('#master').innerHTML = h + '</tbody>';
+}
+function renderCodes(){
+  let h = '<thead><tr><th>Section</th><th>Nature</th><th>Rate</th><th>Code</th></tr></thead><tbody>';
+  Object.keys(SECTIONS).filter(k => k !== 'NIL').forEach(k => {
+    h += '<tr><td><b>' + esc(secLabel(k)) + '</b></td><td>' + esc(SECTIONS[k].name) + '</td><td class="num">' + SECTIONS[k].rate + '%</td><td><input type="text" id="code-' + esc(k) + '" data-code="' + esc(k) + '" value="' + esc(state.codes[k] || '') + '" placeholder="e.g. 1024" style="width:90px"></td></tr>';
+  });
+  $('#codes').innerHTML = h + '</tbody>';
+}
+
+/* ---------- copy ---------- */
+let toastT;
+function toast(t){ const el = $('#toast'); el.textContent = t; el.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => el.classList.remove('show'), 2200); }
+function copy(text){
+  const fallback = () => { const ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select();
+    let ok = false; try { ok = document.execCommand('copy'); } catch(e){} ta.remove(); toast(ok ? 'Copied. Paste into Excel.' : 'Copy was blocked by the browser.'); };
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(() => toast('Copied. Paste into Excel.'), fallback); else fallback();
+}
+$('#copyChallan').addEventListener('click', () => {
+  const rows = [[M.viewName], ['Code','Section','Vendor','TDS','Interest','Total']];
+  M.viewCodes.forEach(c => {
+    rows.push([c.code, c.section ? secLabel(c.section) : '', 'All vendors', c.tdsR, c.interestR, c.tdsR + c.interestR]);
+    [...c.vendors.values()].forEach(v => rows.push(['', '', v.vendor, r2(v.tds), v.interest, r2(v.tds + v.interest)]));
+  });
+  rows.push(['Total', '', '', sum(M.viewCodes,'tdsR'), sum(M.viewCodes,'interestR'), sum(M.viewCodes,'tdsR') + sum(M.viewCodes,'interestR')]);
+  copy(rows.map(r => r.join('\t')).join('\n'));
+});
+$('#copyInvoices').addEventListener('click', () => {
+  const rows = [['Vendor','Invoice','Date','Description','Before GST','GST','Section','Code','Rate %','TDS','Interest']].concat(M.invs.map(i =>
+    [i.vendor, i.number, fdate(i.date), i.desc, i.base, i.tax, i.section ? secLabel(i.section) : '', state.codes[i.section] || '', i.rate, i.tds, i.interest]));
+  copy(rows.map(r => r.join('\t')).join('\n'));
+});
+
+/* ---------- events ---------- */
+$('#file').addEventListener('change', e => { if (e.target.files.length) readFiles([...e.target.files]); e.target.value = ''; });
+const drop = $('#drop');
+['dragenter','dragover'].forEach(t => document.addEventListener(t, e => { e.preventDefault(); drop.classList.add('drag'); }));
+['dragleave','drop'].forEach(t => document.addEventListener(t, e => { e.preventDefault(); if (t === 'drop' || e.target === document.documentElement) drop.classList.remove('drag'); }));
+document.addEventListener('drop', e => { const f = e.dataTransfer && e.dataTransfer.files; if (f && f.length) readFiles([...f]); });
+
+$('#view').addEventListener('change', e => { const v = e.target.value; state.view = v === 'fy' ? 'fy' : (+v === M.perMI ? 'cur' : +v); render(); });
+$('#goods').addEventListener('click', e => {
+  const b = e.target.closest('.code-btn'); if (!b) return;
+  const k = b.dataset.code; const open = !state.open.has(k);
+  if (open) state.open.add(k); else state.open.delete(k);
+  b.setAttribute('aria-expanded', String(open));
+  const row = document.getElementById(b.getAttribute('aria-controls')); if (row) row.hidden = !open;
+});
+$('#codesTable').addEventListener('click', e => {
+  const b = e.target.closest('.code-btn'); if (!b) return;
+  const k = b.dataset.code; const open = !state.open.has(k);
+  if (open) state.open.add(k); else state.open.delete(k);
+  b.setAttribute('aria-expanded', String(open));
+  const row = document.getElementById(b.getAttribute('aria-controls')); if (row) row.hidden = !open;
+});
+$('#period').addEventListener('change', e => { state.settings.period = e.target.value || null; state.view = 'cur'; render(); });
+$('#payDate').addEventListener('change', e => { state.settings.payDate = e.target.value || null; render(); });
+$('#rate').addEventListener('change', e => { state.settings.rate = +e.target.value; render(); });
+$('#thr').addEventListener('change', e => { state.settings.thresholds = e.target.checked; render(); });
+
+$('#invoices').addEventListener('change', e => {
+  const k = e.target.dataset.key; if (!k) return;
+  if (e.target.value) state.overrides[k] = {section: e.target.value}; else delete state.overrides[k];
+  store('overrides', state.overrides); render();
+});
+$('#master').addEventListener('change', e => {
+  const i = e.target.dataset.i, f = e.target.dataset.f; if (i === undefined) return;
+  state.rules[+i][f] = e.target.type === 'checkbox' ? e.target.checked : e.target.value.trim(); store('rules8', state.rules); render();
+});
+$('#master').addEventListener('click', e => {
+  const d = e.target.dataset.del; if (d === undefined) return;
+  state.rules.splice(+d, 1); store('rules8', state.rules); render();
+});
+$('#addRule').addEventListener('click', () => { state.rules.push({...BLANK_RULE}); store('rules8', state.rules); renderRules(); });
+$('#resetRules').addEventListener('click', () => { state.rules = ent().rules.map(r => ({...BLANK_RULE, ...r})); state.overrides = {}; store('rules8', state.rules); store('overrides', {}); render(); toast('Default rules restored'); });
+$('#codes').addEventListener('change', e => { const k = e.target.dataset.code; if (!k) return; state.codes[k] = e.target.value.trim(); store('codes2', state.codes); render(); });
+$('#saveMonth').addEventListener('click', () => {
+  const month = Math.floor(M.perMI / 12) + '-' + String(M.perMI % 12 + 1).padStart(2,'0');
+  const rows = M.invs.filter(i => i.tds > 0).map(i => ({month, vendor:i.vendor, number:i.number, date: i.date ? iso(i.date) : '', base:i.base, gst:i.tax,
+    tds: r2(i.tds), interest:i.interest, code: state.codes[i.section] || '', desc:i.desc, source:'Saved from dashboard'}));
+  const saved = recall('history', []).filter(r => r.month !== month).concat(rows);
+  store('history', saved); loadHistory(); render();
+  toast(monthLabel(M.perMI) + ' saved to the year');
+});
+
+$('#entitySeg').addEventListener('click', e => {
+  const b = e.target.closest('button[data-entity]'); if (!b || b.dataset.entity === currentEntity) return;
+  loadEntity(b.dataset.entity); render(); toast('Switched to ' + ent().name);
+});
+
+loadEntity(recall('entity', 'tech'));
+render();
+})();
+</script>
