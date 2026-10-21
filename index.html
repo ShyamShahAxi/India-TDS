@@ -181,6 +181,49 @@ details.card > .inner{padding:0 18px 18px;display:flex;flex-direction:column;gap
 .opening{display:flex;flex-wrap:wrap;gap:12px 24px;align-items:flex-end;padding:16px 18px}
 #glOpen{width:160px}
 
+/* Payment email */
+.pay{padding:16px 18px;display:flex;flex-direction:column;gap:12px}
+.pay-head{display:flex;flex-wrap:wrap;gap:12px 24px;align-items:flex-end}
+#payTo{width:min(340px,100%)}
+.pay-subject{font-weight:600}
+/* The preview is the email itself, styled inline like Outlook will show it, so it sits on white paper in both themes */
+.pay-body{background:#ffffff;color:#000000;border:1px solid var(--line);border-radius:6px;padding:16px 18px;overflow:auto;max-height:560px}
+.pay-acts{display:flex;gap:8px 12px;flex-wrap:wrap;align-items:center}
+.pay.locked .pay-body{opacity:.6}
+
+/* Assistant */
+.chat{display:flex;flex-direction:column;gap:12px}
+.chatlog{display:flex;flex-direction:column;gap:16px;padding:18px;min-height:200px}
+.msg{max-width:min(780px,100%);display:flex;flex-direction:column;gap:6px;min-width:0}
+.msg.user{align-self:flex-end;background:var(--sunk);border:1px solid var(--line);border-radius:10px 10px 2px 10px;padding:10px 14px;white-space:pre-wrap}
+.msg.bot{align-self:flex-start}
+.msg .who{font-size:.66rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600}
+.msg .files{font-size:.75rem;color:var(--muted)}
+.msg .error{font-size:.8rem;color:var(--bad)}
+.md p{margin:0 0 8px} .md p:last-child{margin-bottom:0}
+.md ul,.md ol{margin:0 0 8px;padding-left:20px} .md li{margin-bottom:3px}
+.md table{width:auto;font-size:.82rem;margin:2px 0 10px;border:1px solid var(--line)}
+.md th,.md td{padding:6px 10px;border:1px solid var(--line)}
+.md code{font-family:var(--f-mono);font-size:.8rem;background:var(--sunk);padding:0 4px;border-radius:3px}
+.thinking{color:var(--muted);font-style:italic}
+.starters{display:flex;flex-wrap:wrap;gap:8px}
+.starter{all:unset;cursor:pointer;font-size:.8rem;border:1px solid var(--line-strong);border-radius:999px;padding:5px 12px;background:var(--surface);color:var(--ink)}
+.starter:hover{border-color:var(--ink)}
+.starter:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
+.composer{display:flex;flex-direction:column;gap:10px;padding:12px 14px}
+.composer:focus-within{border-color:var(--ink)}
+.composer.drag{outline:2px dashed var(--red);outline-offset:3px;background:var(--sunk)}
+#askNote{color:var(--muted);font-size:.78rem;min-width:0}
+#askNote.bad{color:var(--bad);font-weight:500}
+#askInput{font:inherit;color:var(--ink);background:transparent;border:0;resize:vertical;min-height:60px;width:100%;outline:none}
+.composer-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.composer-row .grow{flex:1}
+.attach-list{display:flex;gap:6px;flex-wrap:wrap}
+.attach-list:empty{display:none}
+.attach{display:inline-flex;gap:4px;align-items:center;font-size:.75rem;border:1px solid var(--line);border-radius:999px;padding:2px 2px 2px 10px;background:var(--sunk)}
+.attach button{all:unset;cursor:pointer;padding:0 7px;color:var(--muted);font-size:.9rem;line-height:1}
+.attach button:focus-visible{outline:2px solid var(--brand)}
+
 .err{background:var(--bad-soft);color:var(--bad);border-radius:8px;padding:10px 14px;font-size:.875rem}
 .toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom, 0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:8px 16px;border-radius:8px;font-size:.85rem;opacity:0;transition:opacity .2s;pointer-events:none;z-index:20}
 .toast.show{opacity:1}
@@ -217,6 +260,7 @@ details.card > .inner{padding:0 18px 18px;display:flex;flex-direction:column;gap
     <button type="button" role="tab" id="tab-gl" data-tab="gl" aria-controls="p-gl">GL reconciliation</button>
     <button type="button" role="tab" id="tab-limits" data-tab="limits" aria-controls="p-limits">Certificates &amp; 194Q</button>
     <button type="button" role="tab" id="tab-checks" data-tab="checks" aria-controls="p-checks">Earlier months <span class="count" id="priorCount"></span></button>
+    <button type="button" role="tab" id="tab-ask" data-tab="ask" aria-controls="p-ask">Ask TDS</button>
     <button type="button" role="tab" id="tab-data" data-tab="data" aria-controls="p-data">Files &amp; rules</button>
   </nav>
 </header>
@@ -248,6 +292,23 @@ details.card > .inner{padding:0 18px 18px;display:flex;flex-direction:column;gap
     <div class="block">
       <div class="block-head"><h2 id="diffTitle">Differences to address</h2></div>
       <div class="card scroll" id="diffs"></div>
+    </div>
+    <div class="block" id="payBlock">
+      <div class="block-head"><h2>Payment email</h2><span id="payState"></span></div>
+      <p class="hint" id="payHint"></p>
+      <div class="card pay">
+        <div class="pay-head">
+          <div class="field"><label for="payTo">To</label><input type="text" id="payTo" placeholder="name@company.com" autocomplete="email"></div>
+          <label class="check" for="payReviewed"><input type="checkbox" id="payReviewed"> I've reviewed this month's challan</label>
+        </div>
+        <div class="field"><span class="lbl">Subject</span><p class="pay-subject" id="paySubject"></p></div>
+        <div class="field"><span class="lbl">Email</span><div class="pay-body" id="payBody"></div></div>
+        <div class="pay-acts">
+          <button class="btn" id="paySubjectCopy" type="button">Copy subject</button>
+          <button class="btn primary" id="payCopy" type="button">Copy email</button>
+          <span class="dim">Paste into a new email in Outlook. The tables keep their layout.</span>
+        </div>
+      </div>
     </div>
     <details class="card" id="pInvoices">
       <summary>Invoice detail <span class="dim" id="invCount"></span></summary>
@@ -301,6 +362,38 @@ details.card > .inner{padding:0 18px 18px;display:flex;flex-direction:column;gap
     </div>
     <div class="card"><ul class="issues" id="prior"></ul></div>
     <p class="hint">Saving keeps the uploaded month in this browser, so next month's certificate usage and these checks include it.</p>
+  </section>
+
+  <!-- Assistant -->
+  <section class="panel" id="p-ask" role="tabpanel" aria-labelledby="tab-ask" hidden>
+    <div class="pagehead">
+      <div><h1>Ask TDS</h1><p class="sub">Ask about a payment, or attach an invoice, an email, a Concur extract or a GL report. Answers use this dashboard's rates, vendor rules and data, and are estimates to confirm with the advisor.</p></div>
+      <div class="controls"><button class="btn small" id="askClear" type="button">New chat</button></div>
+    </div>
+    <div class="card empty" id="askOff" hidden></div>
+    <div class="chat" id="askOn">
+      <div class="card chatlog" id="askLog" aria-live="polite"></div>
+      <div class="starters" id="askStarters">
+        <button class="starter" type="button" data-q="Which section, code and rate apply to AWS cloud hosting invoices?">AWS hosting: which section?</button>
+        <button class="starter" type="button" data-q="Check this month's invoices against the vendor rules and certificates. List anything wrong, with amounts.">Check this month's invoices</button>
+        <button class="starter" type="button" data-q="Explain the open items in the GL reconciliation and the journal that clears each one.">Explain the GL open items</button>
+        <button class="starter" type="button" data-q="Which lower deduction certificates are close to or over their limit, and what should AP do?">Certificates near the limit</button>
+      </div>
+      <form class="card composer" id="askForm">
+        <label for="askInput" class="vh">Your question</label>
+        <textarea id="askInput" rows="3" placeholder="e.g. What TDS applies to a ₹6,00,000 security assessment by Nangia & Co?"></textarea>
+        <div class="attach-list" id="askFiles"></div>
+        <div class="composer-row">
+          <input type="file" id="askFile" class="vh" multiple accept="image/png,image/jpeg,image/webp,image/gif,.txt,.eml,.csv,.xlsx,.xls,.xlsm,.pdf">
+          <label for="askFile" class="btn small">Attach file</label>
+          <span id="askNote" role="status"></span>
+          <span class="grow"></span>
+          <button class="btn small" id="askStop" type="button" hidden>Stop</button>
+          <button class="btn primary" id="askSend" type="submit">Send</button>
+        </div>
+      </form>
+      <p class="hint">Uses your own Claude usage; Claude asks for permission the first time. Files are read in this browser and sent to Claude only with your question.</p>
+    </div>
   </section>
 
   <!-- Files and rules -->
@@ -372,7 +465,7 @@ const DEFAULT_RULES = [
   {vendor:'indiqube', keyword:'rent', section:'194-I(b)', ldc:'1', cert:'1AB0326XYI', ldcFrom:'2026-04-01', ldcLimit:'44871000'},
   {vendor:'indiqube', keyword:'data management', section:'194J-tech', fyOver:true},
   {vendor:'indiqube', section:'194C', fyOver:true},
-  {vendor:'swai', section:'194J-prof', ldc:'1', cert:'1NB0526BXL', ldcFrom:'2026-05-25', ldcLimit:'50000000'},
+  {vendor:'swai', section:'194C', ldc:'1', cert:'1NB0526BXL', ldcFrom:'2026-05-25', ldcLimit:'50000000'},
   {vendor:'mispras', section:'194-I(b)', ldc:'4.01', cert:'1AC0326HYR', ldcFrom:'2026-04-01', ldcLimit:'18265920'},
   {vendor:'indeed', section:'194C'},
   {vendor:'info edge', section:'194J-prof'},
@@ -848,6 +941,7 @@ const DIGITAL_GL = {file:'General Ledger report - 2026-10-21 (250500, Apr-Sep 20
 const ENTITIES = {
   tech:    {name:'AXI Technologies India Private Limited', line:'AXI Technologies India · TAN BLRA51905A · TDS', rules: DEFAULT_RULES, history: HISTORY, goods: GOODS, sample: true,
     inv: SAMPLE_INV, bankRows: SAMPLE_BANK, invNote: 'Concur extract, September 2026', bankNote: 'HDFC statement, September 2026',
+    pay: {who:'Treta Advisors', greet:'Hi Treta team', tan:'BLRA51905A'},
     gl: {office:'AUS045', sample: TECH_GL, tb: {'2026-09': -1820.28},
       openNote: 'Kept as a balance to reconcile later. The likely cause is either the 1 Jun 2026 reversal of FY 2025-26 invoices (₹1,41,499.40) taking out more than the opening held, or March TDS paid in the 29 Apr challan that was never credited to 250500. The Jan–Mar 2026 GL with transaction amounts will show which.',
       items: [
@@ -857,6 +951,7 @@ const ENTITIES = {
       ]}},
   digital: {name:'AXI Digital India Private Limited', line:'AXI Digital India · PAN ABDCA5184A · TDS', history: DIGITAL_HISTORY, goods: [], sample: true,
     inv: DIGITAL_INV, bankRows: DIGITAL_BANK, invNote: 'Concur extract, September 2026', bankNote: 'Kotak and HDFC statements, September 2026',
+    pay: {who:'Abhijith', greet:'Hi Abhijith', tan:''},
     gl: {office:'AUS055', sample: DIGITAL_GL, tb: {'2026-09': -920.62},
       openNote: 'This is an estimate from the USD balance and may be out by about ₹1,000 either way. The INR balance from the FY 2025-26 ledger will confirm it.',
       items: [
@@ -938,13 +1033,15 @@ function parseWorkbook(wb){
     if (hi >= 0) {
       const h = rows[hi].map(norm);
       const c = {vendor:col(h,'vendor name'), num:col(h,'invoice number'), name:col(h,'invoice name'), date:col(h,'invoice date'),
-        amt:col(h,'invoice amount','request total'), tax:col(h,'tax','tax amount','gst'), desc:col(h,'description','purpose')};
+        amt:col(h,'invoice amount','request total'), tax:col(h,'tax','tax amount','gst'), desc:col(h,'description','purpose'),
+        wht:col(h,'whtax','wh tax','wht'), pct:col(h,'percentage'), ent:col(h,'custom 01 entity','entity')};
       rows.slice(hi + 1).forEach(r => {
         const vendor = String(r[c.vendor] ?? '').trim(); const amount = toNum(r[c.amt]);
         if (!vendor || !amount) return;
         const number = String((c.num >= 0 && r[c.num]) || (c.name >= 0 && r[c.name]) || '').trim();
         out.invoices.push({vendor, number, date: c.date >= 0 ? toDate(r[c.date]) : null, amount, tax: c.tax >= 0 ? toNum(r[c.tax]) : 0,
-          desc: c.desc >= 0 ? String(r[c.desc] ?? '') : '', key: norm(vendor) + '|' + number});
+          desc: c.desc >= 0 ? String(r[c.desc] ?? '') : '', key: norm(vendor) + '|' + number,
+          apWht: c.wht >= 0 ? toNum(r[c.wht]) : null, apRate: c.pct >= 0 ? String(r[c.pct] ?? '').trim() : '', entity: c.ent >= 0 ? String(r[c.ent] ?? '').trim() : ''});
       });
       return;
     }
@@ -1487,7 +1584,7 @@ function render(){
   $('#priorCount').textContent = pc.length ? String(pc.length) : '';
   const rank = {bad:0, warn:1, info:2, ok:3};
   $('#prior').innerHTML = (pc.length ? pc.slice().sort((a, b) => rank[a[0]] - rank[b[0]]) : [['ok', state.history.some(h => h.mi < M.perMI) ? 'No issues found in earlier months.' : 'No earlier months loaded.']]).map(([c, t]) => '<li class="' + c + '"><span class="mark"></span><span>' + t + '</span></li>').join('');
-  renderRules(); renderCodes(); renderFiles(); renderOverview();
+  renderRules(); renderCodes(); renderFiles(); renderOverview(); renderPay(); if (!ask.busy) renderAskLog();
   showTab(state.tab, false);
 }
 
@@ -1714,7 +1811,7 @@ function renderFiles(){
   $('#sampleChip').hidden = ![state.srcInv.status, state.srcBank.status, glSrc.status].includes('sample');
 }
 
-const TABS = ['overview', 'challan', 'gl', 'limits', 'checks', 'data'];
+const TABS = ['overview', 'challan', 'gl', 'limits', 'checks', 'ask', 'data'];
 function showTab(name, user){
   if (!TABS.includes(name)) name = 'overview';
   const changed = state.tab !== name; state.tab = name;
@@ -1727,13 +1824,319 @@ function showTab(name, user){
   }
 }
 
+/* ---------- payment email ---------- */
+// Built from the uploaded month's challan; copying is held back until the month is marked reviewed.
+function payEmail(){
+  const cfg = ent().pay, m = M.perMI, month = MONF[m % 12] + ' ' + Math.floor(m / 12);
+  const codes = byCode(curLines()), t = sum(codes, 'tdsR'), it = sum(codes, 'interestR');
+  const sec = c => c.section && SECTIONS[c.section] ? secLabel(c.section) + ' ' + SECTIONS[c.section].name.toLowerCase() : 'Section not set';
+  const challans = codes.map(c => [c.code || 'not set', sec(c), fmt(c.tdsR, 0), fmt(c.interestR, 0), fmt(c.tdsR + c.interestR, 0)]);
+  const vendors = [];
+  codes.forEach(c => [...c.vendors.values()].sort((a, b) => b.tds - a.tds).forEach(v => vendors.push([c.code || 'not set', v.vendor, fmt(v.tds), v.interest ? fmt(v.interest, 0) : '–'])));
+  const shorts = M.vendors.filter(v => v.short > 0).map(v => [v.name, fmt(v.short)]);
+  const intro = 'The TDS for ' + month + ' has been reviewed. Please deposit the challans below ' +
+    (M.late ? 'as soon as possible. The due date of ' + fdate(M.due) + ' has passed, so interest is included.' : 'by ' + fdate(M.due) + '.');
+  const deductor = 'Deductor: ' + ent().name + (cfg.tan ? ' (TAN ' + cfg.tan + ')' : '');
+  const totalLine = ['Total', '', fmt(t, 0), fmt(it, 0), fmt(t + it, 0)];
+  const closing = 'Please send the challan receipts (CIN and BSR code) once paid so we can update the books.';
+  const subject = 'TDS payment for ' + month + ' · ' + ent().name;
+
+  // HTML with inline styles, which is what email clients keep when pasted
+  const F = 'font-family:Arial,Helvetica,sans-serif;font-size:10pt;color:#000000;';
+  const P = s => '<p style="' + F + 'margin:0 0 10px">' + s + '</p>';
+  const cell = (v, right, head, bold) => '<' + (head ? 'th' : 'td') + ' style="' + F + 'border:1px solid #c9c5bf;padding:4px 10px;text-align:' + (right ? 'right' : 'left') + ';' +
+    (head ? 'background:#f4f4f5;font-weight:bold;' : '') + (bold ? 'font-weight:bold;' : '') + 'white-space:nowrap">' + esc(v) + '</' + (head ? 'th' : 'td') + '>';
+  const table = (head, rows, right, totalRow) => '<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:0 0 14px">' +
+    '<tr>' + head.map((h, i) => cell(h, right[i], true)).join('') + '</tr>' +
+    rows.map(r => '<tr>' + r.map((v, i) => cell(v, right[i])).join('') + '</tr>').join('') +
+    (totalRow ? '<tr>' + totalRow.map((v, i) => cell(v, right[i], false, true)).join('') + '</tr>' : '') + '</table>';
+  const H = s => '<p style="' + F + 'margin:14px 0 6px;font-weight:bold">' + s + '</p>';
+  let html = P(esc(cfg.greet) + ',') + P(esc(intro)) + P(esc(deductor));
+  html += H('Challans to deposit') + table(['Code', 'Section', 'TDS (₹)', 'Interest (₹)', 'Total (₹)'], challans, [0, 0, 1, 1, 1], totalLine);
+  html += H('Vendor detail') + table(['Code', 'Vendor', 'TDS (₹)', 'Interest (₹)'], vendors, [0, 0, 1, 1]);
+  if (shorts.length) html += H('Included above: TDS short deducted by AP') + P('We pay this now and recover it from the vendor.') + table(['Vendor', 'Amount (₹)'], shorts, [0, 1]);
+  html += P(esc(closing)) + P('Thanks,<br>Shyam');
+
+  // Plain text with aligned columns, for apps that do not take formatting
+  const textTable = (head, rows, right) => {
+    const w = head.map((h, i) => Math.max(h.length, ...rows.map(r => String(r[i]).length)));
+    const line = r => r.map((c, i) => right[i] ? String(c).padStart(w[i]) : String(c).padEnd(w[i])).join('   ').replace(/\s+$/, '');
+    return [line(head), w.map(n => '-'.repeat(n)).join('   '), ...rows.map(line)].join('\n');
+  };
+  const T = [cfg.greet + ',', '', intro, '', deductor, '', 'Challans to deposit',
+    textTable(['Code', 'Section', 'TDS (₹)', 'Interest (₹)', 'Total (₹)'], challans.concat([totalLine]), [0, 0, 1, 1, 1]), '',
+    'Vendor detail', textTable(['Code', 'Vendor', 'TDS (₹)', 'Interest (₹)'], vendors, [0, 0, 1, 1])];
+  if (shorts.length) T.push('', 'Included above: TDS short deducted by AP, which we pay now and recover from the vendor', textTable(['Vendor', 'Amount (₹)'], shorts, [0, 1]));
+  T.push('', closing, '', 'Thanks,', 'Shyam');
+  return {subject, html, text: T.join('\n'), month, key: monthKey(m)};
+}
+function renderPay(){
+  const e = payEmail(), reviewed = !!(recall('reviewed', {})[e.key]), to = recall('payTo', '');
+  const inp = $('#payTo'); if (document.activeElement !== inp) inp.value = to;
+  $('#payReviewed').checked = reviewed;
+  $('#paySubject').textContent = e.subject;
+  $('#payBody').innerHTML = e.html;
+  $('#payState').innerHTML = reviewed ? chip('ok', 'Reviewed, ready to send') : chip('warn', 'Not reviewed yet');
+  $('#payHint').textContent = 'For ' + ent().pay.who + ' to deposit ' + e.month + "'s challans. Check the amounts and differences above, then tick reviewed to copy the email.";
+  $('#payCopy').disabled = !reviewed; $('#paySubjectCopy').disabled = !reviewed;
+  document.querySelector('.pay').classList.toggle('locked', !reviewed);
+}
+// Copies the email with its tables. Uses the clipboard API where allowed, else copies the selected preview, which keeps formatting too.
+function copyRich(html, text, done){
+  const viaSelection = () => {
+    const el = $('#payBody'), range = document.createRange(), sel = window.getSelection();
+    range.selectNodeContents(el); sel.removeAllRanges(); sel.addRange(range);
+    let ok = false; try { ok = document.execCommand('copy'); } catch (e) {}
+    sel.removeAllRanges();
+    toast(ok ? done : 'Copy was blocked. Select the email preview and copy it by hand.');
+  };
+  try {
+    if (navigator.clipboard && navigator.clipboard.write && window.ClipboardItem) {
+      navigator.clipboard.write([new ClipboardItem({'text/html': new Blob([html], {type: 'text/html'}), 'text/plain': new Blob([text], {type: 'text/plain'})})])
+        .then(() => toast(done), viaSelection);
+      return;
+    }
+  } catch (e) {}
+  viaSelection();
+}
+
+/* ---------- assistant ---------- */
+// Each question goes to Claude with standing instructions and a compact JSON snapshot of the dashboard.
+const ask = {turns: [], files: [], busy: false, ctl: null, sample: undefined, imgOk: false, maxImg: 4, off: ''};
+const ASK_OFF = ['not_granted', 'sampling_disabled', 'not_declared', 'capability_disabled', 'capability_removed'];
+const CLAUDE_URL = 'https://claude.ai/artifact/B6vZn1PvSNAyBf3siBb4Wb';
+
+function glJson(G){
+  if (!G) return null;
+  return {opening_inr: G.open, opening_basis: G.basis, opening_difference: G.openDiff,
+    month_ends: G.ends.map(e => ({month_end: fdate(monthEnd(e.m)), gl_balance_inr: e.inr, cleared_by_next_challan: e.pending || e.missing ? null : e.cleared,
+      challan_date: e.challanDate ? fdate(e.challanDate) : null, known_items: e.carried, new_unexplained: e.pending || e.missing ? null : e.newUn,
+      next_challan_expected: e.pending ? e.expected : undefined})),
+    known_items: ent().gl.items.map(it => ({amount: it.amount, what: it.text, from: it.from, cleared: it.to || null}))};
+}
+function askContext(){
+  const rates = Object.keys(SECTIONS).filter(k => k !== 'NIL').map(k => { const s = SECTIONS[k];
+    return {section: k, nature: s.name, rate_percent: s.rate, payment_code: state.codes[k] || '',
+      threshold: s.rule === 'single' ? 'over ₹30,000 a bill or ₹1,00,000 a year' : s.rule === 'monthly' ? 'over ₹50,000 a month' : s.rule === 'annual' ? 'over ₹' + fmt(s.annual, 0) + ' a year' : ''}; });
+  const rules = state.rules.filter(r => r.vendor).map(r => ({vendor_contains: r.vendor, description_contains: r.keyword || undefined, section: r.section,
+    lower_rate: r.ldc || undefined, certificate: r.cert || undefined, valid_from: r.ldcFrom || undefined, limit: r.ldcLimit || undefined, over_yearly_limit: r.fyOver || undefined}));
+  const invoices = M.invs.map(i => ({vendor: i.vendor, invoice: i.number, date: i.date ? iso(i.date) : '', before_gst: i.base, gst: i.tax, section: i.section, rate: i.rate,
+    tds_due: r2(i.tds), interest: i.interest || undefined, description: String(i.desc || '').slice(0, 140),
+    notes: [i.hasLdc ? 'certificate ' + (i.cert || 'not recorded') : '', i.overLimit > 0 ? 'over certificate limit by ' + i.overLimit : '', i.below ? i.belowNote : '', !i.sec ? 'no section' : ''].filter(Boolean).join('; ') || undefined}));
+  return {
+    entity: ent().name, month_of_file: MONF[M.perMI % 12] + ' ' + Math.floor(M.perMI / 12), challan_due: fdate(M.due),
+    rates, vendor_rules: rules, invoices_this_month: invoices,
+    challan_by_code: byCode(curLines()).map(c => ({code: c.code, section: c.section, tds: c.tdsR, interest: c.interestR})),
+    differences_to_address: (M.diffRows || []).map(([s, v, t, a]) => ({severity: s, vendor: v, issue: t, amount: a})),
+    certificates: (M.certRows || []).map(x => ({vendor: x.r.vendor, certificate: x.r.cert, section: x.r.section, rate: x.ldc, limit: x.limit, used_before_month: x.before, used_this_month: x.thisMonth, left: x.left})),
+    gl_reconciliation: M.gl ? {office: ent().gl.office, ...glJson(M.gl)} : 'No GL loaded',
+    earlier_month_checks: (M.prior || []).map(p => ({severity: p[0], note: String(p[1]).replace(/<[^>]+>/g, '')}))
+  };
+}
+function askRules(){
+  return 'You are the TDS assistant inside AXI\'s TDS Challan Desk, used by AXI\'s finance team in India. Work under the Income-tax Act, 2025 (TDS sits in section 393; the old 1961 section numbers such as 194C and 194J are used as labels). ' +
+    'The dashboard data below is the source of truth for AXI\'s vendor rules, lower deduction certificates, this month\'s invoices, the challan and the GL reconciliation. Lower deduction certificates apply only to the deductor and section they were issued for.\n\n' +
+    'For an invoice or email: say who the vendor is, what is being paid for and the amount before GST; then give the likely section, payment code, rate, the threshold that applies and the TDS amount, and whether a vendor rule or certificate in the data changes it. Say how sure you are and what to confirm. If the vendor is not resident in India, say section 195 and the tax treaty apply instead and which documents are needed (TRC, Form 10F, no-PE declaration).\n\n' +
+    'For a Concur extract or GL report: check it against the vendor rules and the dashboard data, list each difference with its amount, and say what fixes it.\n\n' +
+    'TDS is worked out on the amount before GST. Write amounts in Indian format with ₹ (₹1,24,784.13). Be brief: lead with the answer, then short "-" bullets; use a table only for several figures; use **bold** sparingly; no headings. When you give a rate or amount, end with one short line saying it is an estimate to confirm with the tax advisor.\n\n' +
+    'DASHBOARD DATA (JSON):\n' + JSON.stringify(askContext());
+}
+
+// Attachments: images go to Claude as images; Concur and GL files are parsed here and sent as compact data.
+// PDFs: pdf.js is loaded from cdnjs the first time one is attached. Text PDFs go as text; scanned ones are rendered to images.
+const PDFJS = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/';
+let pdfLib = null;
+function loadPdfJs(){
+  if (pdfLib) return pdfLib;
+  pdfLib = new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = PDFJS + 'pdf.min.js';
+    s.onload = () => { const lib = window.pdfjsLib; if (!lib) { pdfLib = null; reject(new Error('pdf.js missing')); return; } lib.GlobalWorkerOptions.workerSrc = PDFJS + 'pdf.worker.min.js'; resolve(lib); };
+    s.onerror = () => { pdfLib = null; reject(new Error('pdf.js did not load')); };
+    document.head.appendChild(s);
+  });
+  return pdfLib;
+}
+const textLen = t => t.replace(/\[Page \d+\]|\s/g, '').length;
+async function readPdf(f, imageRoom){
+  const lib = await loadPdfJs();
+  const doc = await lib.getDocument({data: new Uint8Array(await f.arrayBuffer())}).promise;
+  const pages = Math.min(doc.numPages, 8); let text = '';
+  for (let p = 1; p <= pages; p++) {
+    const tc = await (await doc.getPage(p)).getTextContent();
+    text += '\n[Page ' + p + ']\n' + tc.items.map(it => it.str + (it.hasEOL ? '\n' : ' ')).join('');
+  }
+  const images = [];
+  if (textLen(text) < 200) for (let p = 1; p <= Math.min(pages, imageRoom); p++) {
+    const pg = await doc.getPage(p), vp = pg.getViewport({scale: 1.6}), c = document.createElement('canvas');
+    c.width = Math.floor(vp.width); c.height = Math.floor(vp.height);
+    await pg.render({canvasContext: c.getContext('2d'), viewport: vp}).promise;
+    const b = await new Promise(r => c.toBlob(r, 'image/png')); if (b) images.push(b);
+  }
+  return {text: text.trim().slice(0, 40000), images, pages: doc.numPages};
+}
+function askNote(msg, bad){ const n = $('#askNote'); n.textContent = msg; n.classList.toggle('bad', !!bad); }
+async function askAttach(fileList){
+  if (ask.ready) await ask.ready.catch(() => {});
+  if (ask.off) return;
+  const note = [], added = [];
+  const imgRoom = () => ask.maxImg - ask.files.filter(x => x.kind === 'image').length;
+  for (const f of fileList) {
+    const name = f.name, low = name.toLowerCase();
+    try {
+      if (/^image\//.test(f.type)) {
+        if (imgRoom() <= 0) { note.push(name + ': at most ' + ask.maxImg + ' images per question'); continue; }
+        ask.files.push({kind: 'image', name, blob: f}); added.push(name);
+      } else if (low.endsWith('.pdf') || f.type === 'application/pdf') {
+        askNote('Reading ' + name + '…');
+        const r = await readPdf(f, imgRoom());
+        if (textLen(r.text) >= 200) { ask.files.push({kind: 'data', name, text: 'PDF text (' + r.pages + ' page' + (r.pages > 1 ? 's' : '') + '):\n' + r.text}); added.push(name); }
+        else if (r.images.length) { r.images.forEach((b, i) => ask.files.push({kind: 'image', name: name + (r.images.length > 1 ? ' (page ' + (i + 1) + ')' : ''), blob: b})); added.push(name + ' (scanned, sent as images)'); }
+        else note.push(name + ': no readable text in this PDF. Attach a screenshot of it instead');
+      } else if (/\.(txt|eml)$/.test(low)) {
+        ask.files.push({kind: 'data', name, text: (await f.text()).slice(0, 40000)}); added.push(name);
+      } else if (/\.(csv|xlsx|xls|xlsm)$/.test(low)) {
+        ask.files.push({kind: 'data', name, text: await askSheet(f)}); added.push(name);
+      } else note.push(name + ': this file type cannot be read. Use a PDF, image, email, CSV or Excel file');
+    } catch (e) {
+      note.push(name + (low.endsWith('.pdf') ? ': this PDF could not be read. Attach a screenshot of it instead' : ': could not be read'));
+    }
+  }
+  askNote(note.length ? note.join('. ') + '.' : added.length ? 'Attached ' + added.join(', ') + '. Add a question or press Send.' : '', note.length > 0);
+  renderAskFiles();
+  if (added.length) $('#askInput').focus();
+}
+async function askSheet(f){
+  if (typeof XLSX === 'undefined') throw new Error('no reader');
+  let wb;
+  if (/\.csv$/i.test(f.name)) { const text = await f.text(); wb = XLSX.read(text, {type:'string', raw: /posted dt/i.test(text) && /\bjnl\b/i.test(text)}); }
+  else wb = XLSX.read(await f.arrayBuffer(), {type:'array', cellDates:true});
+  const g = glFromWorkbook(wb);
+  if (g) {
+    // Reconcile against the entity whose trial balance the file matches, else the selected one
+    const ends = glEndUsd(g);
+    const match = Object.keys(ENTITIES).find(k => Object.entries(ENTITIES[k].gl.tb).some(([m, v]) => ends[m] !== undefined && Math.abs(ends[m] - v) < 0.01)) || currentEntity;
+    const keep = state.gl, keepEnt = currentEntity; let G, name;
+    state.gl = {...g, file: f.name, uploaded: true}; currentEntity = match;
+    try { G = computeGL(); name = ent().name + ' (office ' + ent().gl.office + ')'; } finally { state.gl = keep; currentEntity = keepEnt; }
+    return 'Intacct WHT payable GL report (account 250500) for ' + name + (match !== keepEnt ? ', matched by its trial balance; the dashboard is showing another entity' : '') +
+      ', reconciled with this dashboard\'s method and that entity\'s known items. Opening USD ' + g.openUsd + ', ' + g.rows.length + ' lines.\n' +
+      JSON.stringify(glJson(G)) + '\nJournal lines other than revaluation (date, doc, memo, journal, INR amount, debit or credit):\n' +
+      JSON.stringify(g.rows.filter(r => r.jnl !== 'UFX').map(r => [iso(r.date), r.doc, r.jnl === 'APJ' ? '' : r.memo, r.jnl, r.amt, r.cr > 0 ? 'Cr' : 'Dr'])).slice(0, 60000);
+  }
+  const p = parseWorkbook(wb);
+  if (p.invoices.length) {
+    const rows = p.invoices.map(inv => { const c = classify(inv), s = SECTIONS[c.section], ldc = ruleLdc(c.rule);
+      return {vendor: inv.vendor, invoice: inv.number, date: inv.date ? iso(inv.date) : '', entity: inv.entity || undefined, before_gst: r2(inv.amount - inv.tax), gst: inv.tax,
+        ap_wht: inv.apWht, ap_rate: inv.apRate || undefined, rule_section: c.section || 'no rule', rule_rate: s ? (ldc !== null && ldc !== s.rate ? ldc + '% with certificate ' + (c.rule.cert || '') : s.rate + '%') : undefined,
+        description: String(inv.desc || '').slice(0, 140)}; });
+    return 'Concur invoice extract: ' + rows.length + ' invoices' + (p.bank.length ? ', plus ' + p.bank.length + ' bank lines' : '') + '. rule_section and rule_rate come from ' + ent().name + '\'s vendor rules; ap_wht and ap_rate are what AP applied. ' +
+      'Rows whose entity is another AXI company are deducted by that company, so ' + ent().name + '\'s certificates do not apply to them.\n' + JSON.stringify(rows).slice(0, 60000);
+  }
+  const sheet = wb.Sheets[wb.SheetNames[0]];
+  return 'Spreadsheet (first sheet as CSV):\n' + XLSX.utils.sheet_to_csv(sheet).slice(0, 40000);
+}
+function renderAskFiles(){
+  $('#askFiles').innerHTML = ask.files.map((f, i) => '<span class="attach">' + esc(f.name) + '<button type="button" data-rm="' + i + '" aria-label="Remove ' + esc(f.name) + '">×</button></span>').join('');
+}
+
+function md(src){
+  const lines = String(src).replace(/\r/g, '').split('\n'); let out = '', list = null, i = 0;
+  const inline = s => esc(s).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/`([^`]+)`/g, '<code>$1</code>');
+  const flush = () => { if (list) { out += '</' + list + '>'; list = null; } };
+  const isSep = r => /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)*\|?\s*$/.test(r);
+  const cells = r => r.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map(c => c.trim());
+  const numeric = c => /^[−\-+₹\d,.()%\s]+$/.test(c) && /\d/.test(c);
+  while (i < lines.length) {
+    const l = lines[i];
+    if (/^\s*\|.*\|\s*$/.test(l)) {
+      flush(); const rows = [];
+      while (i < lines.length && /^\s*\|.*\|\s*$/.test(lines[i])) { rows.push(lines[i]); i++; }
+      const head = cells(rows[0]), body = rows.slice(1).filter(r => !isSep(r)).map(cells);
+      out += '<div class="scroll"><table><thead><tr>' + head.map(c => '<th>' + inline(c) + '</th>').join('') + '</tr></thead><tbody>' +
+        body.map(r => '<tr>' + r.map(c => '<td' + (numeric(c) ? ' class="n"' : '') + '>' + inline(c) + '</td>').join('') + '</tr>').join('') + '</tbody></table></div>';
+      continue;
+    }
+    let m;
+    if ((m = l.match(/^\s*[-*•]\s+(.*)$/))) { if (list !== 'ul') { flush(); out += '<ul>'; list = 'ul'; } out += '<li>' + inline(m[1]) + '</li>'; }
+    else if ((m = l.match(/^\s*\d+[.)]\s+(.*)$/))) { if (list !== 'ol') { flush(); out += '<ol>'; list = 'ol'; } out += '<li>' + inline(m[1]) + '</li>'; }
+    else if (!l.trim()) flush();
+    else { flush(); out += '<p>' + inline(l.replace(/^#{1,6}\s+/, '')) + '</p>'; }
+    i++;
+  }
+  flush();
+  return out;
+}
+function askErrorText(code){
+  return ({cancelled: 'Stopped.', rate_limited: 'Claude is busy or your usage limit has been reached. Try again in a few minutes.',
+    session_expired: 'Your Claude session has expired. Sign in again, then retry.', image_rejected: 'That image could not be read. Try a PNG or JPEG under 20 MB.',
+    refused: 'Claude could not answer that. Try rephrasing the question.', empty_completion: 'No answer came back. Try a shorter question.',
+    prompt_too_large: 'Too much data in one question. Attach a smaller file or start a new chat.', images_unavailable: 'Images cannot be sent from this view. Paste the invoice text instead.',
+    invalid_request: 'The question could not be sent. Start a new chat and try again.'})[code] || 'The answer was interrupted. Try again.';
+}
+function askOffText(code){
+  if (code === 'none') return '<p><b>Ask TDS runs in the Claude version of this dashboard.</b> Open it at <a href="' + CLAUDE_URL + '" target="_blank" rel="noopener">claude.ai</a> to ask questions. Everything else on this page works here.</p>';
+  return '<p><b>Claude is not available for this page.</b> ' + (code === 'not_granted' ? 'It was not allowed when Claude asked. You can allow it from the artifact\'s Permissions menu and reload.' : 'Your account or organization does not allow Claude here.') + '</p>';
+}
+function askUnavailable(code){
+  ask.off = code; ask.sample = null;
+  $('#askOff').innerHTML = askOffText(code); $('#askOff').hidden = false; $('#askOn').hidden = true;
+}
+function renderAskLog(){
+  const intro = '<div class="msg bot"><span class="who">TDS assistant</span><div class="md"><p>Ask which section and rate apply to a payment, or attach an invoice, an email, a Concur extract or a GL report to check. ' +
+    'I work from this dashboard\'s rules and the ' + esc(ent().name) + ' data for ' + esc(MONF[M.perMI % 12] + ' ' + Math.floor(M.perMI / 12)) + '.</p></div></div>';
+  $('#askLog').innerHTML = intro + ask.turns.map(t => t.role === 'user'
+    ? '<div class="msg user">' + esc(t.show) + (t.files.length ? '<span class="files">Attached: ' + esc(t.files.join(', ')) + '</span>' : '') + '</div>'
+    : '<div class="msg bot"><span class="who">TDS assistant</span>' + (t.pending ? '<p class="thinking">Thinking…</p>' : '<div class="md">' + md(t.content) + '</div>') +
+      (t.truncated ? '<p class="dim">The answer was cut short. Ask for less at a time.</p>' : '') + (t.error ? '<p class="error">' + esc(t.error) + '</p>' : '') + '</div>').join('');
+  $('#askSend').disabled = ask.busy; $('#askStop').hidden = !ask.busy;
+}
+async function askSend(question){
+  if (ask.busy) return;
+  const text = String(question || '').trim();
+  if (!text && !ask.files.length) return;
+  if (ask.ready) await ask.ready.catch(() => {});
+  if (!ask.sample) { askUnavailable(ask.off || 'none'); return; }
+  const files = ask.files.slice(); ask.files = []; renderAskFiles(); $('#askNote').textContent = ''; $('#askInput').value = '';
+  const imgs = files.filter(f => f.kind === 'image');
+  const data = files.filter(f => f.kind === 'data').map(f => '--- Attached file: ' + f.name + ' ---\n' + f.text);
+  const content = (text || 'Please review the attached file.') + (imgs.length ? '\n\n(Attached image' + (imgs.length > 1 ? 's' : '') + ': ' + imgs.map(f => f.name).join(', ') + '. Read them as invoices or emails.)' : '') + (data.length ? '\n\n' + data.join('\n\n') : '');
+  const user = {role: 'user', content, show: text || 'Review the attached file', files: files.map(f => f.name)};
+  const bot = {role: 'assistant', content: '', pending: true};
+  ask.turns.push(user, bot);
+  ask.busy = true; ask.ctl = new AbortController(); renderAskLog();
+  const history = ask.turns.filter(t => t !== bot && !t.failed && t.content).slice(-12).map(t => ({role: t.role, content: t.content}));
+  const opts = {cache: false, signal: ask.ctl.signal, onText: ({text}) => { bot.content = text; bot.pending = false; renderAskLog(); }};
+  if (imgs.length) opts.images = imgs.map(f => f.blob);
+  try {
+    const r = await ask.sample([{role: 'user', content: askRules()}, ...history], opts);
+    bot.content = r.text; bot.truncated = r.truncated;
+  } catch (e) {
+    const code = e && e.code;
+    bot.content = (e && e.text) || ''; bot.failed = !bot.content; bot.error = code === 'cancelled' && bot.content ? 'Stopped.' : askErrorText(code);
+    if (code === 'images_unavailable') ask.imgOk = false;
+    if (ASK_OFF.includes(code)) askUnavailable(code);
+  } finally {
+    bot.pending = false; ask.busy = false; ask.ctl = null; renderAskLog();
+  }
+}
+// Images are accepted whenever Claude is reachable; if this view cannot send them the call says so (images_unavailable).
+async function initAsk(){
+  if (!(window.claude && window.claude.use)) { askUnavailable('none'); return; }
+  const s = await window.claude.use('sample').catch(() => null);
+  ask.sample = s;
+  if (!s) { askUnavailable('none'); return; }
+  try { const lim = await s.limits(); if (lim && lim.images) { ask.imgOk = true; ask.maxImg = lim.images.maxCount || 4; } } catch (e) {}
+}
+function startAsk(){ ask.ready = initAsk(); return ask.ready; }
+
 /* ---------- copy ---------- */
 let toastT;
 function toast(t){ const el = $('#toast'); el.textContent = t; el.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => el.classList.remove('show'), 2200); }
-function copy(text){
+function copy(text, done = 'Copied. Paste into Excel.'){
   const fallback = () => { const ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select();
-    let ok = false; try { ok = document.execCommand('copy'); } catch(e){} ta.remove(); toast(ok ? 'Copied. Paste into Excel.' : 'Copy was blocked by the browser.'); };
-  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(() => toast('Copied. Paste into Excel.'), fallback); else fallback();
+    let ok = false; try { ok = document.execCommand('copy'); } catch(e){} ta.remove(); toast(ok ? done : 'Copy was blocked by the browser.'); };
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(() => toast(done), fallback); else fallback();
 }
 $('#copyChallan').addEventListener('click', () => {
   const rows = [[M.viewName], ['Code','Section','Vendor','TDS','Interest','Total']];
@@ -1753,9 +2156,10 @@ $('#copyInvoices').addEventListener('click', () => {
 /* ---------- events ---------- */
 $('#file').addEventListener('change', e => { if (e.target.files.length) readFiles([...e.target.files]); e.target.value = ''; });
 const drop = $('#drop');
-['dragenter','dragover'].forEach(t => document.addEventListener(t, e => { e.preventDefault(); drop.classList.add('drag'); }));
-['dragleave','drop'].forEach(t => document.addEventListener(t, e => { e.preventDefault(); if (t === 'drop' || e.target === document.documentElement) drop.classList.remove('drag'); }));
-document.addEventListener('drop', e => { const f = e.dataTransfer && e.dataTransfer.files; if (f && f.length) readFiles([...f]); });
+const dropTarget = () => state.tab === 'ask' && !ask.off ? $('#askForm') : drop;
+['dragenter','dragover'].forEach(t => document.addEventListener(t, e => { e.preventDefault(); dropTarget().classList.add('drag'); }));
+['dragleave','drop'].forEach(t => document.addEventListener(t, e => { e.preventDefault(); if (t === 'drop' || e.target === document.documentElement) { drop.classList.remove('drag'); $('#askForm').classList.remove('drag'); } }));
+document.addEventListener('drop', e => { const f = e.dataTransfer && e.dataTransfer.files; if (!f || !f.length) return; if (state.tab === 'ask' && !ask.off) askAttach([...f]); else readFiles([...f]); });
 
 $('#view').addEventListener('change', e => { const v = e.target.value; state.view = v === 'fy' ? 'fy' : (+v === M.perMI ? 'cur' : +v); render(); });
 $('#goods').addEventListener('click', e => {
@@ -1819,14 +2223,33 @@ $('#glOpen').addEventListener('change', e => {
   const v = e.target.value.trim(); state.glOpen = v === '' || isNaN(+v) ? null : +v; store('glOpen', state.glOpen); render();
 });
 
+$('#payTo').addEventListener('change', e => { store('payTo', e.target.value.trim()); renderPay(); });
+$('#payReviewed').addEventListener('change', e => {
+  const key = monthKey(M.perMI), map = recall('reviewed', {});
+  if (e.target.checked) map[key] = true; else delete map[key];
+  store('reviewed', map); renderPay();
+});
+$('#payCopy').addEventListener('click', () => { const p = payEmail(); copyRich(p.html, p.text, 'Email copied. Paste it into a new message.'); });
+$('#paySubjectCopy').addEventListener('click', () => copy(payEmail().subject, 'Subject copied.'));
+
+$('#askForm').addEventListener('submit', e => { e.preventDefault(); askSend($('#askInput').value); });
+$('#askInput').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); askSend($('#askInput').value); } });
+$('#askStop').addEventListener('click', () => { if (ask.ctl) ask.ctl.abort(); });
+$('#askFile').addEventListener('change', e => { if (e.target.files.length) askAttach([...e.target.files]); e.target.value = ''; });
+$('#askFiles').addEventListener('click', e => { const b = e.target.closest('[data-rm]'); if (!b) return; ask.files.splice(+b.dataset.rm, 1); renderAskFiles(); });
+$('#askStarters').addEventListener('click', e => { const b = e.target.closest('[data-q]'); if (b) askSend(b.dataset.q); });
+$('#askClear').addEventListener('click', () => { if (ask.ctl) ask.ctl.abort(); ask.turns = []; ask.files = []; renderAskFiles(); $('#askNote').textContent = ''; renderAskLog(); });
+
 $('#entitySeg').addEventListener('click', e => {
   const b = e.target.closest('button[data-entity]'); if (!b || b.dataset.entity === currentEntity) return;
+  if (ask.ctl) ask.ctl.abort(); ask.turns = []; ask.files = []; renderAskFiles();
   loadEntity(b.dataset.entity); render(); toast('Switched to ' + ent().name);
 });
 
 state.tab = (() => { const h = location.hash.slice(1); if (TABS.includes(h)) return h; try { return localStorage.getItem('tdsdesk.tab') || 'overview'; } catch(e){ return 'overview'; } })();
 loadEntity(recall('entity', 'tech'));
 render();
+startAsk();
 })();
 </script>
 
