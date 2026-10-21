@@ -1,176 +1,246 @@
 <title>TDS Challan Desk</title>
+<meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Instrument+Sans:wght@400;500;600;700&display=swap">
 <style>
-/* Layout: challans to pay by code first (click a code for its vendors), then certificate tracker, then differences. Detail sits in collapsed panels. */
+/* Layout: a sticky app bar (brand, entity, upload) carries the section tabs. Each tab is one workspace:
+   a page head, one summary strip, one main table, and detail folded below. Overview links out to the rest. */
+/* Colours from the Axi design system (v2): zinc neutrals with Axi red (red-600) kept for the primary action,
+   the mark and the active tab, so it is never confused with the error state. */
 :root{
-  --bg:#f2f3f7; --surface:#ffffff; --sunk:#f7f8fb; --ink:#1a2032; --muted:#5b6377; --line:#dcdfe8;
-  --accent:#2c3c9e; --accent-ink:#ffffff; --accent-soft:#e5e8f7;
-  --ok:#1d7349; --ok-soft:#e1f2e8; --warn:#8f5400; --warn-soft:#fbefd9; --bad:#ad2a20; --bad-soft:#fbe5e2;
-  --f-display:"IBM Plex Sans Condensed","Arial Narrow",system-ui,sans-serif;
-  --f-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --bg:#fafafa; --surface:#ffffff; --sunk:#f4f4f5; --ink:#09090b; --muted:#71717a; --line:#e4e4e7; --line-strong:#c9c5bf;
+  --brand:#18181b; --brand-ink:#fafafa;
+  --red:#ea1827; --red-ink:#ffffff;
+  --hero:#444c56; --hero-2:#6b737d; --hero-ink:#ffffff; --hero-muted:#eef0f2;
+  --ok:#15803d; --ok-soft:#ecfdf3; --warn:#b45409; --warn-soft:#fffbeb; --bad:#c5101d; --bad-soft:#fff1f2;
+  --f-display:"Instrument Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-body:"Instrument Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
   --f-mono:"IBM Plex Mono",ui-monospace,"Cascadia Mono",Consolas,monospace;
 }
 @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
-  --bg:#11131a; --surface:#191c26; --sunk:#151821; --ink:#e5e7ef; --muted:#9aa1b4; --line:#2b2f3e;
-  --accent:#93a0f4; --accent-ink:#11131a; --accent-soft:#242a49;
-  --ok:#62d39c; --ok-soft:#163226; --warn:#f2b85c; --warn-soft:#382a12; --bad:#ff8c82; --bad-soft:#3b1a17;
+  --bg:#09090b; --surface:#18181b; --sunk:#121214; --ink:#fafafa; --muted:#a1a1aa; --line:#27272a; --line-strong:#3f3f46;
+  --brand:#fafafa; --brand-ink:#18181b;
+  --red:#ea1827; --red-ink:#ffffff;
+  --hero:#23272d; --hero-2:#3a4048; --hero-ink:#fafafa; --hero-muted:#d4d4d8;
+  --ok:#4ade80; --ok-soft:#0f2a1a; --warn:#fbc124; --warn-soft:#2e2208; --bad:#ff6772; --bad-soft:#3a0d10;
   color-scheme:dark; } }
 :root[data-theme="dark"]{
-  --bg:#11131a; --surface:#191c26; --sunk:#151821; --ink:#e5e7ef; --muted:#9aa1b4; --line:#2b2f3e;
-  --accent:#93a0f4; --accent-ink:#11131a; --accent-soft:#242a49;
-  --ok:#62d39c; --ok-soft:#163226; --warn:#f2b85c; --warn-soft:#382a12; --bad:#ff8c82; --bad-soft:#3b1a17;
+  --bg:#09090b; --surface:#18181b; --sunk:#121214; --ink:#fafafa; --muted:#a1a1aa; --line:#27272a; --line-strong:#3f3f46;
+  --brand:#fafafa; --brand-ink:#18181b;
+  --red:#ea1827; --red-ink:#ffffff;
+  --hero:#23272d; --hero-2:#3a4048; --hero-ink:#fafafa; --hero-muted:#d4d4d8;
+  --ok:#4ade80; --ok-soft:#0f2a1a; --warn:#fbc124; --warn-soft:#2e2208; --bad:#ff6772; --bad-soft:#3a0d10;
   color-scheme:dark; }
 
-body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:14px;line-height:1.5}
-.wrap{max-width:1100px;margin:0 auto;padding-inline:20px;padding-block:24px 64px;display:flex;flex-direction:column;gap:24px}
-h1,h2{font-family:var(--f-display);text-wrap:balance;margin:0;letter-spacing:.005em}
-h1{font-size:1.8rem;font-weight:700;line-height:1.1}
-h2{font-size:1.2rem;font-weight:600}
-p{margin:0}
-.eyebrow{font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font:400 14px/1.5 var(--f-body)}
+h1,h2,p{margin:0}
+h1,h2{font-family:var(--f-display);text-wrap:balance;letter-spacing:-.015em}
+h1{font-size:1.875rem;font-weight:500;line-height:1.15;letter-spacing:-.025em}
+h2{font-size:1.125rem;font-weight:600;line-height:1.3}
+.gut{max-width:1120px;margin:0 auto;padding-left:max(16px, env(safe-area-inset-left, 0px));padding-right:max(16px, env(safe-area-inset-right, 0px))}
+.eyebrow{font-size:.7rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600}
 .num,td.n,th.n{font-family:var(--f-mono);font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
-
-.top{display:flex;flex-wrap:wrap;gap:16px 24px;align-items:flex-end;justify-content:space-between}
-.title-block{display:flex;flex-direction:column;gap:8px;min-width:0}
-.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;width:max-content;background:var(--surface)}
-.seg button{all:unset;cursor:pointer;padding:6px 14px;font:600 .82rem var(--f-body);color:var(--muted)}
-.seg button+button{border-left:1px solid var(--line)}
-.seg button[aria-selected="true"]{background:var(--accent);color:var(--accent-ink)}
-.seg button:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
-.top > div{min-width:0}
-.upload{display:flex;flex-direction:column;gap:6px;align-items:flex-end;text-align:right;border-radius:10px;padding:8px;border:1.5px dashed transparent;transition:border-color .15s}
-.upload.drag{border-color:var(--accent);background:var(--accent-soft)}
-.source{font-size:.78rem;color:var(--muted);max-width:52ch}
+.dim{color:var(--muted);font-size:.78rem}
 .vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;font:600 .85rem var(--f-body);border-radius:7px;padding:7px 14px;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer;width:max-content}
-.btn:hover{border-color:var(--accent)}
-.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
-.btn.small{padding:4px 10px;font-size:.78rem}
-.btn:focus-visible,.upload:focus-within label,input:focus-visible,select:focus-visible,summary:focus-visible,.code-btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 
-.bar{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:flex-end}
+/* App bar */
+.appbar{position:sticky;top:env(safe-area-inset-top, 0px);z-index:10;background:var(--surface);border-bottom:1px solid var(--line)}
+.appbar-in{display:flex;flex-wrap:wrap;align-items:center;gap:10px 20px;padding-block:12px 4px}
+.brand{display:flex;align-items:center;gap:10px;min-width:0}
+.mark{display:grid;place-items:center;width:34px;height:34px;flex:none;border-radius:8px;background:var(--red);color:var(--red-ink);font:700 .7rem var(--f-display);letter-spacing:.04em}
+.brand-name{font:600 1.05rem/1.15 var(--f-display);letter-spacing:-.01em}
+.brand-sub{font-size:.74rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bar-end{margin-left:auto;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.seg{display:inline-flex;border:1px solid var(--line-strong);border-radius:5px;overflow:hidden;background:var(--surface)}
+.seg button{all:unset;cursor:pointer;padding:6px 14px;font:600 .8rem var(--f-body);color:var(--muted)}
+.seg button+button{border-left:1px solid var(--line-strong)}
+.seg button[aria-selected="true"]{background:var(--brand);color:var(--brand-ink)}
+.tabs{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tabs button{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:6px;padding:10px 12px 9px;font:500 .85rem var(--f-body);color:var(--muted);border-bottom:2px solid transparent;white-space:nowrap}
+.tabs button:hover{color:var(--ink)}
+.tabs button[aria-selected="true"]{color:var(--ink);font-weight:600;border-bottom-color:var(--red)}
+.count{font:600 .68rem/1.6 var(--f-mono);border-radius:999px;padding:0 6px;background:var(--warn-soft);color:var(--warn)}
+.count:empty{display:none}
+
+/* Buttons and fields */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;font:600 .82rem var(--f-body);border-radius:4px;padding:8px 16px;border:1px solid var(--line-strong);background:var(--surface);color:var(--ink);cursor:pointer;white-space:nowrap}
+.btn:hover{border-color:var(--brand)}
+.btn.primary{background:var(--red);color:var(--red-ink);border-color:var(--red)}
+.btn.primary:hover{filter:brightness(.92);border-color:var(--red)}
+.btn.small{padding:4px 10px;font-size:.76rem}
+.link{all:unset;cursor:pointer;color:var(--ink);font-weight:600;font-size:.8rem;text-decoration:underline;text-underline-offset:3px;text-decoration-color:var(--line-strong)}
+.link:hover{text-decoration-color:var(--ink)}
+.pill{all:unset;cursor:pointer;font:600 .72rem var(--f-body);border-radius:999px;padding:3px 10px;background:var(--warn-soft);color:var(--warn)}
+#drop.drag{outline:2px dashed var(--red);outline-offset:3px}
+.btn:focus-visible,.link:focus-visible,.pill:focus-visible,.seg button:focus-visible,.tabs button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible,.code-btn:focus-visible,.vh:focus-visible + label{outline:2px solid var(--brand);outline-offset:2px}
 .field{display:flex;flex-direction:column;gap:4px;min-width:0}
-.field label,.field .lbl{font-size:.7rem;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:600}
-input[type=date],input[type=month],input[type=text],input[type=number],select{font:inherit;font-size:.875rem;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:6px 8px;min-width:0}
-#view{font-weight:600;min-width:200px}
-.check{display:flex;gap:8px;align-items:center;font-size:.875rem}
+.field label,.field .lbl{font-size:.68rem;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:600}
+input[type=date],input[type=month],input[type=text],input[type=number],select{font:inherit;font-size:.85rem;color:var(--ink);background:var(--surface);border:1px solid var(--line-strong);border-radius:6px;padding:6px 8px;min-width:0}
+.check{display:flex;gap:8px;align-items:center;font-size:.85rem}
+.controls{display:flex;flex-wrap:wrap;gap:12px 16px;align-items:flex-end}
 
+/* Page structure */
+.wrap{padding-block:28px 72px;display:flex;flex-direction:column;gap:24px}
+.panel{display:flex;flex-direction:column;gap:28px}
+.pagehead{display:flex;flex-wrap:wrap;gap:14px 24px;align-items:flex-end;justify-content:space-between}
+.pagehead > div{min-width:0}
+.sub{color:var(--muted);font-size:.875rem;max-width:72ch;margin-top:4px}
+.block{display:flex;flex-direction:column;gap:10px;min-width:0}
+.block-head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:6px 16px}
+.hint{color:var(--muted);font-size:.8125rem;max-width:76ch}
 .card{background:var(--surface);border:1px solid var(--line);border-radius:10px}
-.total{display:flex;flex-wrap:wrap;gap:12px 32px;align-items:flex-end;padding:18px 20px;background:var(--accent-soft);border-color:transparent}
-.total .big{font-family:var(--f-display);font-size:2.4rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums}
-.total .part{display:flex;flex-direction:column;gap:2px}
-.total .mid{font-family:var(--f-mono);font-size:1.05rem;font-variant-numeric:tabular-nums}
-.total .meta{margin-left:auto;display:flex;flex-direction:column;gap:6px;align-items:flex-end;text-align:right}
-
-.sec-head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:6px 16px;margin-bottom:10px}
-.sec-head p{color:var(--muted);font-size:.84rem;max-width:72ch}
 .scroll{overflow-x:auto}
-table{border-collapse:collapse;width:100%;font-size:.86rem}
-th{font-size:.68rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600;text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);background:var(--sunk);white-space:nowrap}
-td{padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+
+/* Headline amount */
+.hero{display:flex;flex-wrap:wrap;gap:14px 40px;align-items:flex-end;padding:24px 26px;background:linear-gradient(105deg,var(--hero) 0%,var(--hero-2) 100%);color:var(--hero-ink);border-color:transparent}
+.hero > .figure:first-child{position:relative;padding-left:24px}
+.hero > .figure:first-child::before{content:"";position:absolute;left:0;top:22px;width:14px;height:14px;background:var(--red);clip-path:polygon(0 0,100% 0,0 100%)}
+.hero > .figure:first-child .eyebrow::before{content:"/// ";letter-spacing:.02em}
+.hero .eyebrow,.hero .dim{color:var(--hero-muted)}
+.figure{display:flex;flex-direction:column;gap:3px;min-width:0}
+.big{font:500 3rem/1 var(--f-display);letter-spacing:-.03em;font-variant-numeric:tabular-nums}
+.val{font:500 1.1rem/1.3 var(--f-mono);font-variant-numeric:tabular-nums}
+.hero .end{margin-left:auto;display:flex;flex-direction:column;gap:8px;align-items:flex-end;text-align:right}
+
+/* Summary strip: figures share one card, divided by hairlines */
+.figures{display:flex;flex-wrap:wrap;overflow:hidden}
+.figures .figure{flex:1 1 210px;padding:14px 18px;box-shadow:-1px -1px 0 var(--line)}
+.figures .figure .chips{margin-top:4px}
+
+/* Overview cards */
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px}
+.ocard{display:flex;flex-direction:column;gap:6px;padding:16px 18px;min-width:0}
+.ocard .headline{font:500 1.55rem/1.2 var(--f-display);letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.ocard .line{color:var(--muted);font-size:.8125rem;flex:1}
+.ocard .row{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px;padding-top:10px;border-top:1px solid var(--line)}
+
+/* Tables */
+table{border-collapse:collapse;width:100%;font-size:.85rem}
+th{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600;text-align:left;padding:10px 14px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:10px 14px;border-bottom:1px solid var(--line);vertical-align:top}
 tbody:last-of-type tr:last-child td, tr:last-child td{border-bottom:none}
 tfoot td{font-weight:600;background:var(--sunk);border-top:1px solid var(--line)}
-.dim{color:var(--muted);font-size:.78rem}
 td.desc{max-width:280px;min-width:180px;color:var(--muted)}
 tr.grp td{background:var(--sunk);font-weight:600;font-family:var(--f-display);font-size:.9rem}
 td select{max-width:190px}
-.code{font-family:var(--f-mono);font-size:.82rem;background:var(--sunk);border:1px solid var(--line);border-radius:4px;padding:1px 6px}
-
+.code{font-family:var(--f-mono);font-size:.8rem;background:var(--sunk);border:1px solid var(--line);border-radius:4px;padding:1px 6px}
 .code-btn{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:10px;border-radius:4px}
 .code-btn .caret{display:inline-block;width:0;height:0;border-left:5px solid var(--muted);border-top:4px solid transparent;border-bottom:4px solid transparent;transition:transform .15s}
 .code-btn[aria-expanded="true"] .caret{transform:rotate(90deg)}
 tr.code-row:hover td{background:var(--sunk)}
-tr.code-row td{border-bottom:1px solid var(--line)}
-tr.drill > td{padding:0 12px 12px 36px;background:var(--sunk)}
-tr.drill table{font-size:.82rem;background:var(--surface);border:1px solid var(--line);border-radius:6px}
-tr.drill th{background:var(--surface)}
+tr.drill > td{padding:0 14px 14px 38px;background:var(--sunk)}
+tr.drill table{font-size:.8rem;background:var(--surface);border:1px solid var(--line);border-radius:6px}
+tr.sev-bad td:first-child{box-shadow:inset 3px 0 0 var(--bad)}
+tr.sev-warn td:first-child{box-shadow:inset 3px 0 0 var(--warn)}
+tr.muted-row td{color:var(--muted)}
+.empty{padding:16px 18px;color:var(--muted)}
 
+/* Status */
 .chip{display:inline-flex;align-items:center;gap:4px;font-size:.72rem;font-weight:600;border-radius:999px;padding:2px 8px;white-space:nowrap;line-height:1.5}
 .chip.ok{background:var(--ok-soft);color:var(--ok)}
 .chip.warn{background:var(--warn-soft);color:var(--warn)}
 .chip.bad{background:var(--bad-soft);color:var(--bad)}
-.chip.info{background:var(--accent-soft);color:var(--accent)}
+.chip.info{background:var(--sunk);color:var(--ink);box-shadow:inset 0 0 0 1px var(--line)}
 .chips{display:flex;flex-wrap:wrap;gap:4px}
-tr.sev-bad td:first-child{box-shadow:inset 3px 0 0 var(--bad)}
-tr.sev-warn td:first-child{box-shadow:inset 3px 0 0 var(--warn)}
-
 .issues{list-style:none;margin:0;padding:0}
-.issues li{display:grid;grid-template-columns:6px minmax(0,1fr);gap:12px;padding:10px 14px;border-bottom:1px solid var(--line)}
+.issues li{display:grid;grid-template-columns:4px minmax(0,1fr);gap:14px;padding:12px 16px;border-bottom:1px solid var(--line)}
 .issues li:last-child{border-bottom:none}
-.issues .mark{border-radius:3px}
-.issues .bad .mark{background:var(--bad)} .issues .warn .mark{background:var(--warn)} .issues .info .mark{background:var(--accent)} .issues .ok .mark{background:var(--ok)}
+.issues .mark{border-radius:2px}
+.issues .bad .mark{background:var(--bad)} .issues .warn .mark{background:var(--warn)} .issues .info .mark{background:var(--muted)} .issues .ok .mark{background:var(--ok)}
 
-.panels{display:flex;flex-direction:column;gap:10px}
-details.card > summary{cursor:pointer;padding:12px 16px;font-family:var(--f-display);font-weight:600;font-size:1rem;display:flex;gap:10px;align-items:center;list-style:none}
+/* Files list */
+.files{list-style:none;margin:0;padding:0}
+.files li{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;padding:14px 18px;border-bottom:1px solid var(--line)}
+.files li:last-child{border-bottom:none}
+.files .what{flex:1 1 260px;min-width:0}
+.files .what b{font-weight:600}
+.files .acts{display:flex;gap:8px;align-items:center}
+
+/* Folded detail */
+.folds{display:flex;flex-direction:column;gap:10px}
+details.card > summary{cursor:pointer;padding:13px 18px;font:600 .95rem var(--f-display);display:flex;gap:10px;align-items:center;list-style:none}
 details.card > summary::-webkit-details-marker{display:none}
 details.card > summary::before{content:"";width:0;height:0;border-left:5px solid var(--muted);border-top:4px solid transparent;border-bottom:4px solid transparent;transition:transform .15s}
 details.card[open] > summary::before{transform:rotate(90deg)}
 details.card > summary .dim{font-family:var(--f-body);font-weight:400}
-details.card > .inner{padding:0 16px 16px;display:flex;flex-direction:column;gap:10px}
-details .note{font-size:.82rem;color:var(--muted);max-width:80ch}
+details.card > .inner{padding:0 18px 18px;display:flex;flex-direction:column;gap:12px}
+.note{font-size:.8rem;color:var(--muted);max-width:80ch}
 .master input[type=text]{width:100%;min-width:110px}
 .master input[type=number]{width:72px}
+.opening{display:flex;flex-wrap:wrap;gap:12px 24px;align-items:flex-end;padding:16px 18px}
+#glOpen{width:160px}
 
 .err{background:var(--bad-soft);color:var(--bad);border-radius:8px;padding:10px 14px;font-size:.875rem}
-.empty{padding:14px 16px;color:var(--muted)}
-.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:8px 16px;border-radius:8px;font-size:.85rem;opacity:0;transition:opacity .2s;pointer-events:none}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom, 0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:8px 16px;border-radius:8px;font-size:.85rem;opacity:0;transition:opacity .2s;pointer-events:none;z-index:20}
 .toast.show{opacity:1}
 .foot{font-size:.76rem;color:var(--muted);max-width:90ch}
 
-@media (max-width:640px){ .upload{align-items:flex-start;text-align:left} .total .meta{margin-left:0;align-items:flex-start;text-align:left} .total .big{font-size:2rem} }
+@media (max-width:640px){
+  h1{font-size:1.5rem} .big{font-size:2.2rem}
+  .hero .end{margin-left:0;align-items:flex-start;text-align:left}
+  .bar-end{margin-left:0} .brand-sub{white-space:normal}
+}
 @media (prefers-reduced-motion:reduce){ *{transition:none!important} }
 </style>
 
-<div class="wrap">
-  <header class="top">
-    <div class="title-block">
-      <div class="seg" role="tablist" aria-label="Entity" id="entitySeg">
-        <button type="button" role="tab" id="ent-tech" data-entity="tech">AXI Technologies</button>
-        <button type="button" role="tab" id="ent-digital" data-entity="digital">AXI Digital</button>
-      </div>
-      <p class="eyebrow" id="entityLine">AXI Technologies India · TDS</p>
-      <h1>TDS Challan Desk</h1>
+<header class="appbar">
+  <div class="gut appbar-in">
+    <div class="brand">
+      <span class="mark" aria-hidden="true">TDS</span>
+      <div style="min-width:0"><p class="brand-name">TDS Challan Desk</p><p class="brand-sub" id="entityLine">AXI Technologies India · TDS</p></div>
     </div>
-    <div class="upload" id="drop">
+    <div class="seg" role="tablist" aria-label="Entity" id="entitySeg">
+      <button type="button" role="tab" id="ent-tech" data-entity="tech">AXI Technologies</button>
+      <button type="button" role="tab" id="ent-digital" data-entity="digital">AXI Digital</button>
+    </div>
+    <div class="bar-end">
+      <button class="pill" id="sampleChip" type="button" hidden>Sample data in use</button>
       <input type="file" id="file" class="vh" multiple accept=".xlsx,.xls,.xlsm,.csv">
-      <label for="file" class="btn primary">Upload Concur file</label>
-      <p class="source" id="source"></p>
+      <input type="file" id="glFile" class="vh" accept=".csv,.xlsx,.xls" tabindex="-1">
+      <label for="file" class="btn primary" id="drop">Upload files</label>
     </div>
-  </header>
+  </div>
+  <nav class="gut tabs" role="tablist" aria-label="Sections" id="tabs">
+    <button type="button" role="tab" id="tab-overview" data-tab="overview" aria-controls="p-overview">Overview</button>
+    <button type="button" role="tab" id="tab-challan" data-tab="challan" aria-controls="p-challan">Challan <span class="count" id="diffCount"></span></button>
+    <button type="button" role="tab" id="tab-gl" data-tab="gl" aria-controls="p-gl">GL reconciliation</button>
+    <button type="button" role="tab" id="tab-limits" data-tab="limits" aria-controls="p-limits">Certificates &amp; 194Q</button>
+    <button type="button" role="tab" id="tab-checks" data-tab="checks" aria-controls="p-checks">Earlier months <span class="count" id="priorCount"></span></button>
+    <button type="button" role="tab" id="tab-data" data-tab="data" aria-controls="p-data">Files &amp; rules</button>
+  </nav>
+</header>
 
+<main class="gut wrap">
   <div id="error" class="err" hidden></div>
 
-  <div class="bar" aria-label="View">
-    <div class="field"><label for="view">Show</label><select id="view"></select></div>
-    <div class="field"><label for="payDate">Challan payment date</label><input type="date" id="payDate"></div>
-  </div>
-
-  <section class="card total" id="total" aria-label="Amount to pay"></section>
-
-  <section>
-    <div class="sec-head"><h2 id="codesTitle">Challans by code</h2>
-      <button class="btn small" id="copyChallan" type="button">Copy for Excel</button></div>
-    <div class="card scroll" id="codesTable"></div>
+  <!-- Overview -->
+  <section class="panel" id="p-overview" role="tabpanel" aria-labelledby="tab-overview">
+    <div class="pagehead"><div><h1 id="ovTitle">September 2026</h1><p class="sub" id="ovSub"></p></div></div>
+    <div class="card hero" id="ovHero"></div>
+    <div class="cards" id="ovCards"></div>
   </section>
 
-  <section>
-    <div class="sec-head"><h2>Lower deduction certificates</h2><p id="certNote"></p></div>
-    <div class="card scroll" id="certs"></div>
-  </section>
-
-  <section>
-    <div class="sec-head"><h2>Purchases of goods (194Q)</h2><p>0.1% TDS on purchases from one seller above ₹50 lakh in the year (value before GST). Click a vendor to see the invoices.</p></div>
-    <div class="card scroll" id="goods"></div>
-  </section>
-
-  <section>
-    <div class="sec-head"><h2 id="diffTitle">Differences to address</h2><p>Where the TDS AP deducted (invoice total less the amount paid per bank) doesn't match what is due.</p></div>
-    <div class="card scroll" id="diffs"></div>
-  </section>
-
-  <div class="panels">
+  <!-- Challan -->
+  <section class="panel" id="p-challan" role="tabpanel" aria-labelledby="tab-challan" hidden>
+    <div class="pagehead">
+      <div><h1 id="codesTitle">Challan</h1><p class="sub">TDS worked out from the Concur extract and checked against what the bank paid each vendor.</p></div>
+      <div class="controls">
+        <div class="field"><label for="view">Show</label><select id="view"></select></div>
+        <div class="field"><label for="payDate">Payment date</label><input type="date" id="payDate"></div>
+      </div>
+    </div>
+    <section class="card hero" id="total" aria-label="Amount to pay"></section>
+    <div class="block">
+      <div class="block-head"><h2>By payment code</h2><button class="btn small" id="copyChallan" type="button">Copy for Excel</button></div>
+      <div class="card scroll" id="codesTable"></div>
+    </div>
+    <div class="block">
+      <div class="block-head"><h2 id="diffTitle">Differences to address</h2></div>
+      <div class="card scroll" id="diffs"></div>
+    </div>
     <details class="card" id="pInvoices">
       <summary>Invoice detail <span class="dim" id="invCount"></span></summary>
       <div class="inner">
@@ -178,51 +248,100 @@ details .note{font-size:.82rem;color:var(--muted);max-width:80ch}
         <div class="scroll" id="invoices"></div>
       </div>
     </details>
-    <details class="card" id="pBank">
-      <summary>Other bank debits <span class="dim" id="bankCount"></span></summary>
-      <div class="inner"><p class="note">Debits not linked to a Concur invoice, so no TDS is worked out on them.</p><div class="scroll" id="bank"></div></div>
-    </details>
-    <details class="card" id="pPrior">
-      <summary>Checks on earlier months <span class="dim" id="priorCount"></span></summary>
-      <div class="inner"><p class="note">April onwards, from the advisor's monthly summaries, tested against the vendor rules and certificates.</p><ul class="issues" id="prior"></ul>
-        <div><button class="btn small" id="saveMonth" type="button">Save this month to the year</button></div>
-        <p class="note">Saving keeps the uploaded month in this browser, so next month's certificate usage and these checks include it.</p></div>
-    </details>
-    <details class="card" id="pSettings">
-      <summary>Settings</summary>
-      <div class="inner bar">
-        <div class="field"><label for="period">Month of the uploaded file</label><input type="month" id="period"></div>
-        <div class="field"><label for="rate">Interest on late items</label>
-          <select id="rate">
-            <option value="1.5">1.5% a month (TDS booked, deposited late)</option>
-            <option value="1">1% a month (TDS deducted late)</option>
-          </select></div>
-        <div class="field"><span class="lbl">Thresholds</span>
-          <label class="check" for="thr"><input type="checkbox" id="thr" checked> Skip TDS on bills under the section limit</label></div>
-      </div>
-    </details>
-    <details class="card" id="rulesBox">
-      <summary>Vendor rules</summary>
-      <div class="inner">
-        <p class="note">Each invoice takes the first rule whose vendor text appears in the vendor name; rules with description text are checked first, so one vendor can be split (Indiqube rent against services). A lower rate applies a certificate from its valid-from date up to its limit. Used before this month is worked out from earlier months unless you enter a TRACES figure. Changes are saved in this browser.</p>
-        <div class="scroll"><table class="master" id="master"></table></div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <button class="btn small" id="addRule" type="button">Add rule</button>
-          <button class="btn small" id="resetRules" type="button">Restore default rules</button>
+  </section>
+
+  <!-- GL reconciliation -->
+  <section class="panel" id="p-gl" role="tabpanel" aria-labelledby="tab-gl" hidden>
+    <div class="pagehead"><div><h1 id="glTitle">WHT payable reconciliation</h1><p class="sub" id="glSource"></p></div></div>
+    <div class="card empty" id="glEmpty" hidden></div>
+    <div class="card figures" id="glSum"></div>
+    <div class="block" id="glTableBlock">
+      <div class="block-head"><h2>Month-end balances</h2></div>
+      <p class="hint">Each month-end balance, less what the next challan cleared, should leave only the known items below. Anything else is unexplained.</p>
+      <div class="card scroll" id="glTable"></div>
+    </div>
+    <div class="block" id="glItemsBlock">
+      <div class="block-head"><h2>Items to reconcile</h2></div>
+      <div class="card"><ul class="issues" id="glItems"></ul>
+        <div class="opening" id="glOpenBox">
+          <div class="field"><label for="glOpen" id="glOpenLbl">INR balance at the start of the year</label><input type="number" id="glOpen" step="0.01"></div>
+          <p class="note" id="glOpenNote"></p>
         </div>
       </div>
-    </details>
-    <details class="card" id="codesBox">
-      <summary>Section codes (Income-tax Act, 2025)</summary>
-      <div class="inner">
-        <p class="note">Codes follow the advisor's April–August summaries: 1023 contractors who are individuals or HUFs (1%), 1024 other contractors (2%), 1026 technical fees (2%), 1027 professional fees (10%), 1008 equipment rent, 1009 property rent. SWAI's certificate places professional fees at section 393(1), Table Sl. No. 6(iii).D(b). Confirm before filing.</p>
-        <div class="scroll"><table id="codes"></table></div>
-      </div>
-    </details>
-  </div>
+    </div>
+  </section>
 
-  <p class="foot">Rates and limits: 194C 1% (individual/HUF) or 2%, single bill over ₹30,000 or ₹1,00,000 a year. 194J 2% technical or 10% professional, over ₹50,000 a year. 194-I 2% equipment or 10% property, over ₹50,000 a month. TDS is on the amount before GST. Challan due on the 7th of the next month (30 April for March). Files are read in your browser and not sent anywhere.</p>
-</div>
+  <!-- Certificates and 194Q -->
+  <section class="panel" id="p-limits" role="tabpanel" aria-labelledby="tab-limits" hidden>
+    <div class="pagehead"><div><h1>Certificates and 194Q</h1><p class="sub" id="certNote"></p></div></div>
+    <div class="block">
+      <div class="block-head"><h2>Lower deduction certificates</h2></div>
+      <div class="card scroll" id="certs"></div>
+    </div>
+    <div class="block">
+      <div class="block-head"><h2>Purchases of goods (194Q)</h2></div>
+      <p class="hint">0.1% TDS on purchases from one seller above ₹50 lakh in the year, on the value before GST. Click a seller to see the invoices.</p>
+      <div class="card scroll" id="goods"></div>
+    </div>
+  </section>
+
+  <!-- Earlier months -->
+  <section class="panel" id="p-checks" role="tabpanel" aria-labelledby="tab-checks" hidden>
+    <div class="pagehead">
+      <div><h1>Earlier months</h1><p class="sub">April onwards, from the advisor's monthly summaries, tested against the vendor rules and certificates.</p></div>
+      <div class="controls"><button class="btn small" id="saveMonth" type="button">Save this month to the year</button></div>
+    </div>
+    <div class="card"><ul class="issues" id="prior"></ul></div>
+    <p class="hint">Saving keeps the uploaded month in this browser, so next month's certificate usage and these checks include it.</p>
+  </section>
+
+  <!-- Files and rules -->
+  <section class="panel" id="p-data" role="tabpanel" aria-labelledby="tab-data" hidden>
+    <div class="pagehead"><div><h1>Files and rules</h1><p class="sub">Drop files anywhere on the page. Concur extracts, bank statements and the Intacct GL report are recognised automatically. Files are read in this browser and not sent anywhere.</p></div></div>
+    <div class="block">
+      <div class="block-head"><h2>Files in use</h2></div>
+      <div class="card"><ul class="files" id="files"></ul></div>
+    </div>
+    <div class="folds">
+      <details class="card" id="pBank">
+        <summary>Other bank debits <span class="dim" id="bankCount"></span></summary>
+        <div class="inner"><p class="note">Debits not linked to a Concur invoice, so no TDS is worked out on them.</p><div class="scroll" id="bank"></div></div>
+      </details>
+      <details class="card" id="rulesBox">
+        <summary>Vendor rules</summary>
+        <div class="inner">
+          <p class="note">Each invoice takes the first rule whose vendor text appears in the vendor name. Rules with description text are checked first, so one vendor can be split (Indiqube rent and services). A lower rate applies a certificate from its valid-from date up to its limit. Changes are saved in this browser.</p>
+          <div class="scroll"><table class="master" id="master"></table></div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn small" id="addRule" type="button">Add rule</button>
+            <button class="btn small" id="resetRules" type="button">Restore default rules</button>
+          </div>
+        </div>
+      </details>
+      <details class="card" id="codesBox">
+        <summary>Section codes (Income-tax Act, 2025)</summary>
+        <div class="inner">
+          <p class="note">Codes follow the advisor's April–August summaries: 1023 contractors who are individuals or HUFs (1%), 1024 other contractors (2%), 1026 technical fees (2%), 1027 professional fees (10%), 1008 equipment rent, 1009 property rent. SWAI's certificate places professional fees at section 393(1), Table Sl. No. 6(iii).D(b). Confirm before filing.</p>
+          <div class="scroll"><table id="codes"></table></div>
+        </div>
+      </details>
+      <details class="card" id="pSettings">
+        <summary>Settings</summary>
+        <div class="inner controls">
+          <div class="field"><label for="period">Month of the uploaded file</label><input type="month" id="period"></div>
+          <div class="field"><label for="rate">Interest on late items</label>
+            <select id="rate">
+              <option value="1.5">1.5% a month (TDS booked, deposited late)</option>
+              <option value="1">1% a month (TDS deducted late)</option>
+            </select></div>
+          <div class="field"><span class="lbl">Thresholds</span>
+            <label class="check" for="thr"><input type="checkbox" id="thr" checked> Skip TDS on bills under the section limit</label></div>
+        </div>
+      </details>
+    </div>
+    <p class="foot">Rates and limits: 194C 1% (individual/HUF) or 2%, single bill over ₹30,000 or ₹1,00,000 a year. 194J 2% technical or 10% professional, over ₹50,000 a year. 194-I 2% equipment or 10% property, over ₹50,000 a month. TDS is on the amount before GST. Challan due on the 7th of the next month (30 April for March).</p>
+  </section>
+</main>
 <div class="toast" id="toast" role="status"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -496,11 +615,157 @@ const DIGITAL_HISTORY = [
   ['2026-08','EigenFlow LLP','INV-2026-0003','2026-07-31',200000,0,20000,900,'1027','IT consultancy July'],
   ['2026-08','Fab Money Technologies Private Limited','Fab-2026-27/63','2026-07-31',63000,11340,6300,284,'1027','Advisory']
 ];
+// AXI Technologies WHT Payable GL (Sage Intacct, office AUS045): [posted, doc, memo, jnl, curr, txn amt, debit USD, credit USD, balance USD]
+const TECH_GL = {file:'General Ledger report - 2026-10-15 (250500, Apr-Sep 2026)', openUsd:-2329.65, rows:[
+  ['01/04/2026','','Reversed -- Reval USD Mar26-','UFX','USD',519.95,0,519.95,-2849.60],
+  ['01/04/2026','','Reversed -- Reval USD Mar26-','UFX','USD',515.98,0,515.98,-3365.58],
+  ['01/04/2026','','Reversed -- Reval USD Mar26-','UFX','USD',124.25,0,124.25,-3489.83],
+  ['02/04/2026','','','APJ','INR',8625.00,0,93.75,-3583.58],
+  ['13/04/2026','','','APJ','INR',2766.43,0,29.27,-3612.85],
+  ['13/04/2026','','','APJ','INR',28000.00,0,296.24,-3909.09],
+  ['13/04/2026','','','APJ','INR',16000.00,0,169.60,-4078.69],
+  ['13/04/2026','','','APJ','INR',4000.00,0,42.40,-4121.09],
+  ['13/04/2026','','','APJ','INR',49608.00,0,525.84,-4646.93],
+  ['13/04/2026','','','APJ','INR',22500.00,0,238.50,-4885.43],
+  ['14/04/2026','','','APJ','INR',560.00,0,5.89,-4891.32],
+  ['14/04/2026','','','APJ','INR',11500.00,0,120.98,-5012.30],
+  ['14/04/2026','','','APJ','INR',16981.24,0,178.64,-5190.94],
+  ['29/04/2026','','','APJ','INR',3208.00,0,33.94,-5224.88],
+  ['29/04/2026','','','APJ','INR',18045.00,0,190.92,-5415.80],
+  ['29/04/2026','','','APJ','INR',39785.62,0,420.93,-5836.73],
+  ['29/04/2026','','','APJ','INR',10000.00,0,108.70,-5945.43],
+  ['29/04/2026','UVKA/25-26/04299','Witholding Tax Adjustment','GJ','INR',9600.00,100.80,0,-5844.63],
+  ['29/04/2026','TDS challans','TDS challans paid by 30 April 2026','GJ','INR',279226.00,2931.87,0,-2912.76],
+  ['30/04/2026','','Reval USD 2007-2604 Apr26-','UFX','USD',555.88,555.88,0,-2356.88],
+  ['30/04/2026','','Reval USD 2007-2604 Apr26-','UFX','USD',103.02,103.02,0,-2253.86],
+  ['30/04/2026','','Reval USD 2007-2604 Apr26-','UFX','USD',523.08,523.08,0,-1730.78],
+  ['01/05/2026','','Reversed -- Reval USD 2007-2604 Apr26-','UFX','USD',555.88,0,555.88,-2286.66],
+  ['01/05/2026','','Reversed -- Reval USD 2007-2604 Apr26-','UFX','USD',103.02,0,103.02,-2389.68],
+  ['01/05/2026','','Reversed -- Reval USD 2007-2604 Apr26-','UFX','USD',523.08,0,523.08,-2912.76],
+  ['06/05/2026','TDS challans','TDS challans piad by 7 May 2026','GJ','INR',90080.00,943.14,0,-1969.62],
+  ['13/05/2026','','','APJ','INR',2442.00,0,25.64,-1995.26],
+  ['13/05/2026','','','APJ','INR',116.99,0,1.23,-1996.49],
+  ['13/05/2026','','','APJ','INR',106792.94,0,1121.33,-3117.82],
+  ['13/05/2026','','','APJ','INR',21750.00,0,228.38,-3346.20],
+  ['13/05/2026','','','APJ','INR',900.00,0,9.45,-3355.65],
+  ['13/05/2026','','','APJ','INR',10000.00,0,105.00,-3460.65],
+  ['13/05/2026','','','APJ','INR',92.00,0,0.97,-3461.62],
+  ['13/05/2026','','','APJ','INR',2714.50,0,28.58,-3490.20],
+  ['26/05/2026','','','APJ','INR',39785.62,0,414.57,-3904.77],
+  ['27/05/2026','','','APJ','INR',12400.00,0,129.83,-4034.60],
+  ['27/05/2026','','','APJ','INR',18045.00,0,188.03,-4222.63],
+  ['27/05/2026','','','APJ','INR',3208.00,0,33.43,-4256.06],
+  ['28/05/2026','','','APJ','INR',5700.00,0,59.34,-4315.40],
+  ['31/05/2026','','Reval May26-','UFX','USD',562.33,562.33,0,-3753.07],
+  ['31/05/2026','','Reval May26-','UFX','USD',526.62,526.62,0,-3226.45],
+  ['31/05/2026','','Reval May26-','UFX','USD',91.33,91.33,0,-3135.12],
+  ['01/06/2026','','Reversed -- Reval May26-','UFX','USD',562.33,0,562.33,-3697.45],
+  ['01/06/2026','','Reversed -- Reval May26-','UFX','USD',526.62,0,526.62,-4224.07],
+  ['01/06/2026','','Reversed -- Reval May26-','UFX','USD',91.33,0,91.33,-4315.40],
+  ['01/06/2026','UVKA/25-26/04285','Reversed -- Parking Charges','StatAdj','INR',28000.00,295.40,0,-4020.00],
+  ['01/06/2026','KATI-25-26-02487','Reversed -- Laptop and Accessories rental','StatAdj','INR',2766.40,29.19,0,-3990.81],
+  ['01/06/2026','UVKA/25-26/04296','Reversed -- Office Rent For April 26','StatAdj','INR',49608.00,523.36,0,-3467.45],
+  ['01/06/2026','UVKA/25-26/04297','Reversed -- Office Rent For April 26','StatAdj','INR',22500.00,237.38,0,-3230.07],
+  ['01/06/2026','UVKA/25-26/04298','Reversed -- Parking Charges for April 26','StatAdj','INR',4000.00,42.20,0,-3187.87],
+  ['01/06/2026','UVKA/25-26/04299','Reversed -- Internet Facility Charges','StatAdj','INR',16000.00,168.80,0,-3019.07],
+  ['01/06/2026','2025-26/052','Reversed -- Business Support','StatAdj','INR',10000.00,105.50,0,-2913.57],
+  ['01/06/2026','SWAI/2025-26/330','Reversed -- Recruitment Service Fee','StatAdj','INR',8625.00,90.99,0,-2822.58],
+  ['03/06/2026','','','APJ','INR',110000.00,0,1153.90,-3976.48],
+  ['05/06/2026','TDS challans','TDS challans paid by 7 June 2026','GJ','INR',223856.00,2341.54,0,-1634.94],
+  ['10/06/2026','','','APJ','INR',900.00,0,9.29,-1644.23],
+  ['25/06/2026','','','APJ','INR',2456.43,0,25.69,-1669.92],
+  ['25/06/2026','','','APJ','INR',2348.44,0,24.64,-1694.56],
+  ['25/06/2026','','','APJ','INR',2512.50,0,26.51,-1721.07],
+  ['25/06/2026','','','APJ','INR',6429.99,0,67.84,-1788.91],
+  ['25/06/2026','','','APJ','INR',40792.00,0,424.24,-2213.15],
+  ['26/06/2026','','','APJ','INR',14201.60,0,148.55,-2361.70],
+  ['26/06/2026','','','APJ','INR',3432.00,0,35.93,-2397.63],
+  ['26/06/2026','','','APJ','INR',194498.24,0,2036.40,-4434.03],
+  ['26/06/2026','','','APJ','INR',27500.00,0,287.93,-4721.96],
+  ['26/06/2026','','','APJ','INR',10000.00,0,104.70,-4826.66],
+  ['29/06/2026','','','APJ','INR',1380.40,0,14.44,-4841.10],
+  ['30/06/2026','','Reval Jun26-','UFX','USD',456.13,456.13,0,-4384.97],
+  ['30/06/2026','','Reval Jun26-','UFX','USD',197.88,197.88,0,-4187.09],
+  ['30/06/2026','','Reval Jun26-','UFX','USD',505.33,505.33,0,-3681.76],
+  ['01/07/2026','','Reversed -- Reval Jun26-','UFX','USD',456.13,0,456.13,-4137.89],
+  ['01/07/2026','','Reversed -- Reval Jun26-','UFX','USD',197.88,0,197.88,-4335.77],
+  ['01/07/2026','','Reversed -- Reval Jun26-','UFX','USD',505.33,0,505.33,-4841.10],
+  ['07/07/2026','SWAI/2026/27/51','SWAI WH Tax Adjustment from 2% to 1%','GJ','INR',13750.00,143.96,0,-4697.14],
+  ['07/07/2026','SWAI/2026/27/53','SWAI WH Tax Adjustment from 2% to 1%','GJ','INR',1716.00,17.97,0,-4679.17],
+  ['07/07/2026','SWAI/2026/27/52','SWAI WH Tax Adjustment from 2% to 1%','GJ','INR',97249.12,1018.20,0,-3660.97],
+  ['07/07/2026','TDS challans','TDS challans paid by 7 July 2026','GJ','INR',303285.00,3181.46,0,-479.51],
+  ['14/07/2026','','','APJ','INR',600.00,0,6.33,-485.84],
+  ['14/07/2026','','','APJ','INR',355.38,0,3.76,-489.60],
+  ['15/07/2026','','','APJ','INR',8400.00,0,88.03,-577.63],
+  ['15/07/2026','','','APJ','INR',117687.73,0,1233.37,-1811.00],
+  ['15/07/2026','','','APJ','INR',22113.64,0,231.75,-2042.75],
+  ['15/07/2026','','','APJ','INR',2033.00,0,21.31,-2064.06],
+  ['15/07/2026','','','APJ','INR',10000.00,0,104.80,-2168.86],
+  ['15/07/2026','','','APJ','INR',625.00,0,6.56,-2175.42],
+  ['15/07/2026','','','APJ','INR',41392.00,0,433.79,-2609.21],
+  ['31/07/2026','','','APJ','INR',48400.00,0,505.78,-3114.99],
+  ['31/07/2026','','','APJ','INR',2108.40,0,22.29,-3137.28],
+  ['31/07/2026','','Reval Jul27-','UFX','USD',17.36,17.36,0,-3119.92],
+  ['31/07/2026','','Reval Jul27-','UFX','USD',540.56,540.56,0,-2579.36],
+  ['31/07/2026','','Reval Jul27-','UFX','USD',628.38,628.38,0,-1950.98],
+  ['01/08/2026','','Reversed -- Reval Jul27-','UFX','USD',17.36,0,17.36,-1968.34],
+  ['01/08/2026','','Reversed -- Reval Jul27-','UFX','USD',540.56,0,540.56,-2508.90],
+  ['01/08/2026','','Reversed -- Reval Jul27-','UFX','USD',628.38,0,628.38,-3137.28],
+  ['07/08/2026','TDS challans','TDS challans paid by 7 Aug 2026','GJ','INR',253715.00,2661.47,0,-475.81],
+  ['11/08/2026','','','APJ','INR',1262.40,0,13.19,-489.00],
+  ['11/08/2026','','','APJ','INR',32588.22,0,339.90,-828.90],
+  ['11/08/2026','','','APJ','INR',11104.58,0,115.60,-944.50],
+  ['11/08/2026','','','APJ','INR',41392.00,0,459.04,-1403.54],
+  ['11/08/2026','','','APJ','INR',100.00,0,1.04,-1404.58],
+  ['11/08/2026','','','APJ','INR',7065.00,0,73.76,-1478.34],
+  ['11/08/2026','','','APJ','INR',2003.16,0,22.22,-1500.56],
+  ['11/08/2026','','','APJ','INR',215.91,0,2.39,-1502.95],
+  ['11/08/2026','','','APJ','INR',121647.50,0,1349.07,-2852.02],
+  ['11/08/2026','','','APJ','INR',22000.00,0,243.98,-3096.00],
+  ['25/08/2026','','','APJ','INR',315.00,0,3.31,-3099.31],
+  ['25/08/2026','','','APJ','INR',13200.00,0,138.07,-3237.38],
+  ['25/08/2026','','','APJ','INR',47646.90,0,501.25,-3738.63],
+  ['25/08/2026','','','APJ','INR',20983.54,0,220.75,-3959.38],
+  ['26/08/2026','','','APJ','INR',10000.00,0,110.90,-4070.28],
+  ['26/08/2026','','','APJ','INR',390.00,0,4.09,-4074.37],
+  ['31/08/2026','','Reval Aug26-','UFX','USD',100.01,100.01,0,-3974.36],
+  ['31/08/2026','','Reval Aug26-','UFX','USD',526.90,526.90,0,-3447.46],
+  ['31/08/2026','','Reval Aug26-','UFX','USD',668.69,668.69,0,-2778.77],
+  ['01/09/2026','','Reversed -- Reval Aug26-','UFX','USD',100.01,0,100.01,-2878.78],
+  ['01/09/2026','','Reversed -- Reval Aug26-','UFX','USD',526.90,0,526.90,-3405.68],
+  ['01/09/2026','','Reversed -- Reval Aug26-','UFX','USD',668.69,0,668.69,-4074.37],
+  ['07/09/2026','Axi Tech - Sept 26 TDS','Axi Tech - Sept 26 TDS','GJ','INR',331914.00,3505.01,0,-569.36],
+  ['08/09/2026','','','APJ','INR',128.00,0,1.34,-570.70],
+  ['08/09/2026','','','APJ','INR',680.50,0,7.14,-577.84],
+  ['08/09/2026','','','APJ','INR',1372.00,0,14.47,-592.31],
+  ['14/09/2026','','','APJ','INR',3619.09,0,37.93,-630.24],
+  ['14/09/2026','','','APJ','INR',230.00,0,2.38,-632.62],
+  ['14/09/2026','','','APJ','INR',122.50,0,1.28,-633.90],
+  ['14/09/2026','','','APJ','INR',41392.00,0,434.62,-1068.52],
+  ['23/09/2026','','','APJ','INR',17500.00,0,184.63,-1253.15],
+  ['23/09/2026','','','APJ','INR',20000.00,0,211.00,-1464.15],
+  ['23/09/2026','','','APJ','INR',1978.00,0,20.77,-1484.92],
+  ['23/09/2026','','','APJ','INR',2040.70,0,21.43,-1506.35],
+  ['23/09/2026','','','APJ','INR',19500.00,0,204.75,-1711.10],
+  ['23/09/2026','','','APJ','INR',123818.93,0,1300.10,-3011.20],
+  ['23/09/2026','','','APJ','INR',10000.00,0,105.00,-3116.20],
+  ['30/09/2026','','Reval Sep26-','UFX','USD',564.44,564.44,0,-2551.76],
+  ['30/09/2026','','Reval Sep26-','UFX','USD',214.94,0,214.94,-2766.70],
+  ['30/09/2026','','Reval Sep26-','UFX','USD',946.42,946.42,0,-1820.28]
+]};
 const ENTITIES = {
   tech:    {name:'AXI Technologies India Private Limited', line:'AXI Technologies India · TAN BLRA51905A · TDS', rules: DEFAULT_RULES, history: HISTORY, goods: GOODS, sample: true,
-    inv: SAMPLE_INV, bankRows: SAMPLE_BANK, note: 'September 2026 Concur extract and HDFC statement (17 invoices)'},
+    inv: SAMPLE_INV, bankRows: SAMPLE_BANK, invNote: 'Concur extract, September 2026', bankNote: 'HDFC statement, September 2026',
+    gl: {office:'AUS045', sample: TECH_GL, tb: {'2026-09': -1820.28},
+      openNote: 'Kept as a balance to reconcile later. The likely cause is either the 1 Jun 2026 reversal of FY 2025-26 invoices (₹1,41,499.40) taking out more than the opening held, or March TDS paid in the 29 Apr challan that was never credited to 250500. The Jan–Mar 2026 GL with transaction amounts will show which.',
+      items: [
+        {from:'2026-04', to:'2026-05', amount:141499.43, label:'FY 2025-26 invoices re-posted', text:'FY 2025-26 invoices posted again in April, reversed on 1 Jun 2026 (StatAdj ₹1,41,499.40)'},
+        {from:'2026-05', amount:92, text:'Computer Junction KATI-26-27-00116: TDS booked but left out of the 7 Jun challan'},
+        {from:'2026-06', amount:451.60, text:'Native Promoters RE-033: TDS booked ₹14,201.60, challan paid ₹13,750'}
+      ]}},
   digital: {name:'AXI Digital India Private Limited', line:'AXI Digital India · PAN ABDCA5184A · TDS', history: DIGITAL_HISTORY, goods: [], sample: true,
-    inv: DIGITAL_INV, bankRows: DIGITAL_BANK, note: 'September 2026 Concur extract (9 invoices) with Kotak and HDFC statements',
+    inv: DIGITAL_INV, bankRows: DIGITAL_BANK, invNote: 'Concur extract, September 2026', bankNote: 'Kotak and HDFC statements, September 2026',
+    gl: {office:'AUS055', sample: null, tb: {'2026-09': -920.62}, openNote: '', items: []},
     rules: [
       {vendor:'amazon web services', section:'194J-tech'},
       {vendor:'bootlabs', section:'194J-tech'},
@@ -525,20 +790,22 @@ const ENTITIES = {
 const ent = () => ENTITIES[currentEntity];
 
 const state = {
-  invoices: [], bank: [], source: '', rules: [], codes: {}, history: [], overrides: {},
+  invoices: [], bank: [], srcInv: {}, srcBank: {}, rules: [], codes: {}, history: [], overrides: {}, gl: null, glOpen: null,
   settings: {period: null, payDate: null, rate: 1.5, thresholds: true}
 };
 
 function loadSample(){
   if (!ent().sample) {
     state.invoices = []; state.bank = [];
-    state.source = '<b>No file loaded for ' + esc(ent().name) + '.</b> Upload the Concur extract and bank statement to start.';
+    state.srcInv = {status:'missing', detail:'Upload the Concur extract to work out the challan'};
+    state.srcBank = {status:'missing', detail:'Upload the bank statement to check what AP deducted'};
     state.settings.period = null; state.settings.payDate = iso(new Date());
     return;
   }
   state.invoices = ent().inv.map(r => ({vendor:r[0], number:r[1], date:toDate(r[2]), amount:r[3], tax:r[4], desc:r[5], key:norm(r[0]) + '|' + r[1]}));
   state.bank = ent().bankRows.map(r => ({date:toDate(r[0]), narration:r[1], debit:r[2], credit:r[3], notes:r[4]}));
-  state.source = '<b>Sample loaded:</b> ' + esc(ent().note) + '. Upload a file to replace it.';
+  state.srcInv = {status:'sample', name: ent().invNote, detail: state.invoices.length + ' invoices'};
+  state.srcBank = {status:'sample', name: ent().bankNote, detail: state.bank.length + ' lines'};
   state.settings.period = null; state.settings.payDate = '2026-10-07';
 }
 
@@ -549,7 +816,7 @@ function loadEntity(key){
   state.codes = Object.assign({}, DEFAULT_CODES, recall('codes2', {}));
   state.overrides = recall('overrides', {});
   state.view = 'cur'; state.open = new Set();
-  loadHistory(); loadSample();
+  loadHistory(); loadSample(); loadGL();
   document.querySelectorAll('#entitySeg button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.entity === currentEntity)));
   $('#entityLine').textContent = ent().line;
 }
@@ -596,22 +863,219 @@ function parseWorkbook(wb){
 async function readFiles(files){
   const err = $('#error'); err.hidden = true;
   if (typeof XLSX === 'undefined') { err.textContent = 'The spreadsheet reader did not load. Check your connection and reload the page.'; err.hidden = false; return; }
-  const inv = [], bank = [], names = [];
+  const inv = [], bank = [], names = []; let glDone = false;
   for (const f of files) {
     try {
+      // Intacct GL reports use dd/mm/yyyy, so CSVs are read as plain text to stop the reader turning 01/04 into 4 January
+      if (/\.csv$/i.test(f.name)) {
+        const text = await f.text();
+        if (/posted dt/i.test(text) && /\bjnl\b/i.test(text)) { const g = glFromWorkbook(XLSX.read(text, {type:'string', raw:true})); if (g) { if (!applyGL(g, f.name)) return; glDone = true; continue; } }
+      }
       const wb = XLSX.read(await f.arrayBuffer(), {type:'array', cellDates:true});
+      const g = glFromWorkbook(wb); if (g) { if (!applyGL(g, f.name)) return; glDone = true; continue; }
       const p = parseWorkbook(wb); inv.push(...p.invoices); bank.push(...p.bank); names.push(f.name);
     } catch (e) { err.textContent = 'Could not read ' + f.name + '. Save it as .xlsx or .csv and try again.'; err.hidden = false; return; }
   }
+  if (!inv.length && glDone) return;
   if (!inv.length) {
     err.textContent = 'No invoice list found. The file needs a sheet with "Vendor Name", "Invoice Amount" and "Tax" columns (the Concur Invoices tab).';
     err.hidden = false; return;
   }
   state.invoices = inv; state.bank = bank;
-  state.source = '<b>Loaded:</b> ' + esc(names.join(', ')) + ' · ' + inv.length + ' invoices · ' + (bank.length ? bank.length + ' bank lines' : 'no bank sheet found, so the bank check is skipped');
+  state.srcInv = {status:'loaded', name: names.join(', '), detail: inv.length + ' invoices'};
+  state.srcBank = bank.length ? {status:'loaded', name: names.join(', '), detail: bank.length + ' lines'} : {status:'missing', detail:'No bank sheet in the file, so the bank check is skipped'};
   state.settings.period = null; state.settings.payDate = iso(new Date()); state.view = 'cur';
   render();
   toast('File loaded');
+}
+
+/* ---------- WHT payable GL ---------- */
+// The GL report is in USD with INR transaction amounts. The rec runs in INR: at each month-end the balance should be what the
+// next challan clears (the challan plus any journals posted with it); what is left over is either a known item or unexplained.
+function parseGL(rows){
+  const hi = findHeader(rows, ['posted dt','jnl','txn amt']); if (hi < 0) return null;
+  const h = rows[hi].map(norm);
+  const c = {date:col(h,'posted dt'), doc:col(h,'doc'), memo:col(h,'memo description','memo','description'), jnl:col(h,'jnl'), cur:col(h,'curr','currency'),
+    amt:col(h,'txn amt'), dr:col(h,'debit usd','debit'), cr:col(h,'credit usd','credit'), bal:col(h,'balance usd','balance')};
+  const want = rows.some(r => /250500/.test(String(r[0] ?? '')) && /balance forward/i.test(String(r[0] ?? '')));
+  let openUsd = null, asOf = null, inAcct = false, accounts = 0; const out = [];
+  rows.slice(hi + 1).forEach(r => {
+    const first = String(r[0] ?? '');
+    if (/balance forward/i.test(first)) {
+      accounts++; inAcct = want ? /250500/.test(first) : accounts === 1;
+      if (inAcct) { openUsd = toNum(r[c.bal]); const m = first.match(/as of\s+([\d\/.-]+)/i); asOf = m ? toDate(m[1]) : null; }
+      return;
+    }
+    if (!inAcct) return;
+    const d = toDate(r[c.date]); if (!d) return;
+    out.push({date:d, doc:String(r[c.doc] ?? '').trim(), memo:String(r[c.memo] ?? '').trim(), jnl:String(r[c.jnl] ?? '').trim().toUpperCase(),
+      cur:String(r[c.cur] ?? '').trim().toUpperCase(), amt:Math.abs(toNum(r[c.amt])), dr:Math.abs(toNum(r[c.dr])), cr:Math.abs(toNum(r[c.cr])), bal:toNum(r[c.bal])});
+  });
+  return openUsd === null || !out.length ? null : {openUsd, asOf, rows: out};
+}
+function glFromWorkbook(wb){
+  for (const name of wb.SheetNames) { const g = parseGL(XLSX.utils.sheet_to_json(wb.Sheets[name], {header:1, raw:true, defval:''})); if (g) return g; }
+  return null;
+}
+const monthKey = m => Math.floor(m / 12) + '-' + String(m % 12 + 1).padStart(2,'0');
+const monthEnd = m => new Date(Math.floor(m / 12), m % 12 + 1, 0);
+function glEndUsd(g){ const ends = {}; g.rows.forEach(r => { ends[monthKey(mi(r.date))] = r.bal; }); return ends; }
+function applyGL(g, name){
+  const err = $('#error'); const ends = glEndUsd(g);
+  const other = Object.keys(ENTITIES).find(k => k !== currentEntity && Object.entries(ENTITIES[k].gl.tb).some(([m, v]) => ends[m] !== undefined && Math.abs(ends[m] - v) < 0.01));
+  const mine = Object.entries(ent().gl.tb).some(([m, v]) => ends[m] !== undefined && Math.abs(ends[m] - v) < 0.01);
+  if (other && !mine) {
+    err.textContent = name + ' matches the ' + ENTITIES[other].gl.office + ' trial balance, so it looks like the ' + ENTITIES[other].name + ' GL. Switch to that entity and upload it again.';
+    err.hidden = false; return false;
+  }
+  state.gl = {...g, file: name, uploaded: true};
+  store('gl', {file:name, openUsd:g.openUsd, asOf: g.asOf ? iso(g.asOf) : null, rows: g.rows.map(r => ({...r, date: iso(r.date)}))});
+  render(); toast('GL loaded for ' + ent().name);
+  return true;
+}
+function loadGL(){
+  const saved = recall('gl', null); const cfg = ent().gl;
+  if (saved && saved.rows) state.gl = {file:saved.file, openUsd:saved.openUsd, asOf: toDate(saved.asOf), uploaded:true, rows: saved.rows.map(r => ({...r, date: toDate(r.date)}))};
+  else if (cfg.sample) state.gl = {file:cfg.sample.file, openUsd:cfg.sample.openUsd, asOf:new Date(2026, 3, 1), uploaded:false,
+    rows: cfg.sample.rows.map(a => ({date:toDate(a[0]), doc:a[1], memo:a[2], jnl:a[3], cur:a[4], amt:a[5], dr:a[6], cr:a[7], bal:a[8]}))};
+  else state.gl = null;
+  const o = recall('glOpen', null); state.glOpen = typeof o === 'number' ? o : null;
+}
+const median = a => { if (!a.length) return null; const s = [...a].sort((x, y) => x - y), k = s.length >> 1; return s.length % 2 ? s[k] : (s[k-1] + s[k]) / 2; };
+function computeGL(){
+  const g = state.gl; if (!g) return null;
+  const cfg = ent().gl, rows = g.rows;
+  const m0 = g.asOf ? mi(g.asOf) : Math.min(...rows.map(r => mi(r.date)));
+  const last = Math.max(...rows.map(r => mi(r.date)));
+  const book = rows.filter(r => r.jnl !== 'UFX');
+  const isChallan = r => r.dr > 0 && r.jnl !== 'APJ' && /tds|challan/i.test(r.doc + ' ' + r.memo);
+  const per = new Map(); for (let m = m0; m <= last; m++) per.set(m, {booked:0, otherCr:0, paid:0, adj:0, move:0, usd:null, reval:false, rates:[]});
+  rows.forEach(r => { const p = per.get(mi(r.date)); if (!p) return; p.usd = r.bal; if (r.jnl === 'UFX' && !/^reversed/i.test(r.memo)) p.reval = true; });
+  book.forEach(r => {
+    const p = per.get(mi(r.date)); if (!p) return;
+    p.move += r.cr > 0 ? r.amt : -r.amt;
+    if (r.cr > 0) { if (r.jnl === 'APJ') p.booked += r.amt; else p.otherCr += r.amt; }
+    else if (isChallan(r)) p.paid += r.amt; else p.adj += r.amt;
+    const usd = r.dr || r.cr; if (r.cur === 'INR' && usd > 0) p.rates.push(r.amt / usd);
+  });
+  // Month-ends: the opening (end of the month before m0) and every month in the file
+  const ends = []; let cum = 0;
+  const openReval = rows.some(r => mi(r.date) === m0 && r.jnl === 'UFX' && /^reversed/i.test(r.memo));
+  ends.push({m: m0 - 1, cum: 0, usd: g.openUsd, reval: openReval, rate: median(per.get(m0).rates), p: null});
+  for (let m = m0; m <= last; m++) { const p = per.get(m); cum += p.move; ends.push({m, cum, usd: p.usd, reval: p.reval, rate: median(p.rates), p}); }
+  // INR opening: entered, or estimated from the revalued USD balance at each month-end (USD balance x month's rate, less the INR movement so far)
+  const ests = ends.filter(e => e.reval && e.rate && e.usd !== null).map(e => -e.usd * e.rate - e.cum);
+  const estimate = ests.length ? r2(median(ests)) : null;
+  const open = state.glOpen !== null ? state.glOpen : estimate;
+  const basis = state.glOpen !== null ? 'entered' : estimate !== null ? 'estimated' : 'none';
+  const rateUsed = median(ends.filter(e => e.reval && e.rate).map(e => e.rate));
+  // What the next challan cleared for each month-end
+  ends.forEach(e => {
+    e.inr = r2((open || 0) + e.cum); e.key = monthKey(e.m);
+    const n = e.m + 1, dueDay = e.m % 12 === 2 ? 30 : 7;
+    if (n > last) { e.pending = true; e.due = new Date(Math.floor(n / 12), n % 12, dueDay); return; }
+    const inMonth = book.filter(r => mi(r.date) === n && r.dr > 0 && r.jnl !== 'APJ');
+    const challans = inMonth.filter(isChallan); const onTime = challans.filter(r => r.date.getDate() <= dueDay);
+    const use = onTime.length ? onTime : challans.slice(0, 1);
+    if (!use.length) { e.missing = true; e.cleared = 0; e.challan = 0; e.otherClear = 0; return; }
+    const cutoff = Math.max(...use.map(r => r.date.getTime()));
+    const clear = inMonth.filter(r => r.date.getTime() <= cutoff);
+    e.challanRows = use; e.late = !onTime.length; e.challanDate = new Date(cutoff);
+    e.challan = r2(sum(use, 'amt')); e.cleared = r2(sum(clear, 'amt')); e.otherClear = r2(e.cleared - e.challan);
+  });
+  const first = ends[0];
+  const openDiff = first.pending || first.missing ? null : r2(first.inr - first.cleared);
+  const carried = key => cfg.items.filter(it => it.from <= key && (!it.to || key < it.to));
+  let prevUn = 0;
+  ends.forEach((e, i) => {
+    e.items = i === 0 ? [] : carried(e.key);
+    e.carried = r2(sum(e.items, 'amount'));
+    if (e.pending || e.missing || openDiff === null) { e.expected = openDiff === null ? null : r2(e.inr - openDiff - e.carried - prevUn); return; }
+    e.diff = r2(e.inr - e.cleared);
+    e.unexpl = i === 0 ? 0 : r2(e.diff - openDiff - e.carried);
+    e.newUn = r2(e.unexpl - prevUn); prevUn = e.unexpl;
+  });
+  const nonInr = book.filter(r => r.cur && r.cur !== 'INR');
+  return {ends, open, estimate, basis, rateUsed, openDiff, cfg, nonInr, m0, last, cleared0: first.cleared};
+}
+
+const fyOf = m => 'FY ' + (Math.floor(m / 12) - 1) + '-' + String(Math.floor(m / 12) % 100).padStart(2,'0');
+const keyMonth = k => +k.slice(0,4) * 12 + (+k.slice(5) - 1);
+function renderGL(){
+  const cfg = ent().gl, G = computeGL(), g = state.gl;
+  M.gl = G;
+  ['#glSum', '#glTableBlock', '#glItemsBlock'].forEach(s => { $(s).hidden = !G; });
+  $('#glEmpty').hidden = !!G;
+  if (!G) {
+    const tb = Object.entries(cfg.tb)[0];
+    $('#glSource').textContent = 'Account 250500 · office ' + cfg.office + ' · ' + ent().name;
+    $('#glEmpty').innerHTML = '<p><b>No GL loaded for ' + esc(ent().name) + '.</b> Upload the 250500 General Ledger report for office ' + esc(cfg.office) + ' from Sage Intacct, starting 1 April. ' +
+      'The opening balance is set from it, and each month-end is matched to the challan that clears it.' +
+      (tb ? ' The trial balance shows ' + esc(fmt(tb[1])) + ' USD at ' + esc(fdate(monthEnd(keyMonth(tb[0])))) + '.' : '') + '</p>' +
+      '<p style="margin-top:12px"><label for="glFile" class="btn primary">Upload GL report</label></p>';
+    return;
+  }
+  const E = G.ends, end = E[E.length - 1], od = G.openDiff, est = G.basis === 'estimated';
+  $('#glSource').textContent = 'Account 250500 · office ' + cfg.office + ' · ledger ' + fdate(new Date(Math.floor(G.m0 / 12), G.m0 % 12, 1)) + ' to ' + fdate(monthEnd(G.last)) +
+    ' · ' + (g.uploaded ? g.file : 'sample ledger') + '. Amounts in INR; revaluation lines are left out.';
+
+  // Summary strip
+  const tbv = cfg.tb[end.key];
+  const tbChip = tbv === undefined ? '' : Math.abs(tbv - end.usd) < 0.01 ? chip('ok', 'Agrees with ' + cfg.office + ' trial balance') : chip('bad', 'Trial balance shows ' + fmt(tbv) + ' USD');
+  const fig = (label, value, foot) => '<div class="figure"><span class="eyebrow">' + label + '</span><span class="val">' + value + '</span>' + (foot ? '<span class="dim">' + foot + '</span>' : '') + '</div>';
+  let s = fig('GL balance · ' + esc(fdate(monthEnd(end.m))), rs(end.inr) + (est ? ' <span class="dim">est.</span>' : ''), esc(fmt(-end.usd)) + ' USD in the GL' + (tbChip ? '<span class="chips">' + tbChip + '</span>' : ''));
+  s += fig('Opening to reconcile', od === null ? '—' : rs(od), od === null ? 'Needs the first challan' : Math.abs(od) <= TOL ? 'Opening agrees' : 'Carried from ' + fyOf(E[0].m));
+  s += fig('Other open items', rs(end.carried), end.items.length + ' item' + (end.items.length === 1 ? '' : 's'));
+  if (end.pending) s += fig('Next challan should be', end.expected === null ? '—' : rs(end.expected), 'Due ' + esc(fdate(end.due)));
+  else s += fig('Unexplained', rs(end.unexpl || 0), Math.abs(end.unexpl || 0) <= TOL ? 'Reconciled' : 'To investigate');
+  $('#glSum').innerHTML = s;
+
+  // Month-end table: GL balance - cleared by next challan - known items = unexplained
+  let h = '<table><thead><tr><th>Month-end</th><th class="n">GL balance' + (est ? ' (est.)' : '') + '</th><th class="n">Cleared by next challan</th><th class="n">Known items</th><th class="n">Unexplained</th><th>Status</th></tr></thead><tbody>';
+  E.forEach((e, i) => {
+    const known = od === null ? null : r2(i === 0 ? od : od + e.carried);
+    let clr, un = '—', st;
+    if (e.pending) {
+      clr = '<span class="dim">Due ' + esc(fdate(e.due)) + '</span>';
+      st = chip('info', 'Next challan ' + (e.expected === null ? '' : rs(e.expected, 0)));
+    } else if (e.missing) {
+      clr = '<span class="dim">No challan in the GL</span>'; st = chip('bad', 'No challan posted');
+    } else {
+      clr = fmt(e.cleared) + '<div class="dim">' + esc(fdate(e.challanDate)) + (e.otherClear ? ' · incl. journals ' + fmt(e.otherClear, 0) : '') + '</div>';
+      if (i === 0) { un = fmt(0); st = od === null || Math.abs(od) <= TOL ? chip('ok', 'Agrees') : chip('bad', 'Opening difference'); }
+      else {
+        un = fmt(e.unexpl);
+        st = Math.abs(e.newUn) <= TOL ? chip('ok', 'Agrees') : chip('bad', rs(e.newUn) + ' unexplained');
+        if (e.late) st += ' ' + chip('warn', 'Paid late');
+      }
+    }
+    const sev = (!e.pending && !e.missing && i > 0 && Math.abs(e.newUn) > TOL) || e.missing ? ' class="sev-bad"' : e.pending ? ' class="muted-row"' : '';
+    h += '<tr' + sev + '><td>' + esc(fdate(monthEnd(e.m))) + (i === 0 ? '<div class="dim">Opening</div>' : '') + '</td><td class="n">' + fmt(e.inr) + '</td><td class="n">' + clr + '</td><td class="n">' +
+      (known === null ? '—' : fmt(known)) + '</td><td class="n">' + un + '</td><td><div class="chips">' + st + '</div></td></tr>';
+  });
+  $('#glTable').innerHTML = h + '</tbody></table>';
+
+  // Items carried: the opening difference first, then the known items
+  const li = [];
+  if (od !== null && Math.abs(od) > TOL) li.push(['bad', '<b>Opening balance to reconcile · ' + esc(rs(od)) + '</b><br><span class="dim">The INR balance at ' + esc(fdate(monthEnd(E[0].m))) + ' is ' + esc(rs(G.open)) + (est ? ' (estimated)' : '') +
+    '. The first challan and the journals posted with it cleared ' + esc(rs(G.cleared0)) + '. ' + esc(cfg.openNote || 'Kept as a balance to reconcile later.') + '</span>']);
+  cfg.items.forEach(it => {
+    const open = it.from <= end.key && (!it.to || end.key < it.to);
+    li.push([open ? 'warn' : 'ok', '<b>' + esc(rs(it.amount)) + ' · ' + esc(it.label || it.text.split(':')[0]) + '</b> ' + (open ? chip('warn', 'Open') : chip('ok', 'Cleared ' + monthLabel(keyMonth(it.to)))) +
+      '<br><span class="dim">' + esc(it.text) + ' From ' + esc(monthLabel(keyMonth(it.from))) + '.</span>']);
+  });
+  E.slice(1).filter(e => !e.pending && !e.missing && Math.abs(e.newUn) > TOL).forEach(e =>
+    li.push(['bad', '<b>' + esc(rs(e.newUn)) + ' unexplained at ' + esc(fdate(monthEnd(e.m))) + '</b><br><span class="dim">Compare that month\'s TDS booked with the challan paid on ' + esc(fdate(e.challanDate)) + '.</span>']));
+  if (G.nonInr.length) li.push(['warn', '<b>' + G.nonInr.length + ' line' + (G.nonInr.length === 1 ? ' is' : 's are') + ' not in INR</b><br><span class="dim">The INR balance may be off. Check ' + esc(G.nonInr.slice(0, 3).map(r => fdate(r.date) + ' ' + (r.doc || r.memo || r.jnl)).join('; ')) + '.</span>']);
+  if (!li.length) li.push(['ok', 'No carried items. Every month-end clears against the next challan.']);
+  $('#glItems').innerHTML = li.map(([c, t]) => '<li class="' + c + '"><span class="mark"></span><span>' + t + '</span></li>').join('');
+
+  $('#glOpenLbl').textContent = 'INR balance at ' + fdate(monthEnd(E[0].m));
+  const inp = $('#glOpen'); if (document.activeElement !== inp) inp.value = state.glOpen === null ? '' : String(state.glOpen);
+  inp.placeholder = G.estimate === null ? 'Enter amount' : String(Math.round(G.estimate));
+  $('#glOpenNote').textContent = state.glOpen !== null ? 'Using the figure you entered. Clear the box to go back to the estimate' + (G.estimate !== null ? ' of ' + rs(G.estimate, 0) + '.' : '.') :
+    G.estimate !== null ? 'The GL gives the opening in USD only, so it is estimated at ' + rs(G.estimate, 0) + ' from the revalued USD balances at about ₹' + fmt(G.rateUsed) +
+      ' to the dollar. Enter the INR figure from the ' + fyOf(E[0].m) + ' ledger to replace it.' : 'Enter the INR balance from the prior-year ledger.';
 }
 
 /* ---------- classification ---------- */
@@ -865,7 +1329,6 @@ function byCode(lines){
 function render(){
   M = compute();
   const S = state.settings;
-  $('#source').innerHTML = state.source;
   $('#period').value = S.period || (Math.floor(M.autoMI/12) + '-' + String(M.autoMI%12 + 1).padStart(2,'0'));
   $('#payDate').value = S.payDate || iso(new Date());
   $('#rate').value = String(S.rate);
@@ -884,15 +1347,15 @@ function render(){
   const totT = sum(codes, 'tdsR'), totI = sum(codes, 'interestR');
 
   let meta;
-  if (cur) meta = (M.late ? chip('bad', 'Late: was due ' + fdate(M.due)) : chip('ok', 'Due ' + fdate(M.due))) + '<span class="dim">Worked out from the uploaded file</span>';
-  else if (state.view === 'fy') meta = '<span class="dim">' + months.length + ' months. Earlier months as per the advisor\'s summaries.</span>';
-  else meta = '<span class="dim">As per the advisor\'s summary for the month</span>';
-  $('#total').innerHTML = '<div class="part"><span class="eyebrow">' + (state.view === 'fy' ? 'Challans · ' : 'Challans to pay · ') + esc(viewName) + '</span><span class="big">' + rs(totT + totI, 0) + '</span></div>' +
-    '<div class="part"><span class="eyebrow">TDS</span><span class="mid">' + rs(totT, 0) + '</span></div>' +
-    '<div class="part"><span class="eyebrow">Interest</span><span class="mid">' + rs(totI, 0) + '</span></div>' +
-    '<div class="meta">' + meta + '</div>';
+  if (cur) meta = (M.late ? chip('bad', 'Late: was due ' + fdate(M.due)) : chip('ok', 'Due ' + fdate(M.due))) + '<span class="dim">From the uploaded file</span>';
+  else if (state.view === 'fy') meta = '<span class="dim">' + months.length + ' months; earlier months from the advisor\'s summaries</span>';
+  else meta = '<span class="dim">From the advisor\'s summary for the month</span>';
+  $('#total').innerHTML = '<div class="figure"><span class="eyebrow">' + (state.view === 'fy' ? 'Challans paid and due' : 'Challan to pay') + '</span><span class="big">' + rs(totT + totI, 0) + '</span></div>' +
+    '<div class="figure"><span class="eyebrow">TDS</span><span class="val">' + rs(totT, 0) + '</span></div>' +
+    '<div class="figure"><span class="eyebrow">Interest</span><span class="val">' + rs(totI, 0) + '</span></div>' +
+    '<div class="end">' + meta + '</div>';
 
-  $('#codesTitle').textContent = 'Challans by code · ' + viewName;
+  $('#codesTitle').textContent = 'Challan · ' + viewName;
   let h = '<table><thead><tr><th>Code</th><th>Section</th><th class="n">TDS</th><th class="n">Interest</th><th class="n">Total</th></tr></thead>';
   if (!codes.length) h += '<tbody><tr><td colspan="5" class="empty">No TDS for this period.</td></tr></tbody>';
   codes.forEach(c => {
@@ -910,11 +1373,14 @@ function render(){
   h += '<tfoot><tr><td colspan="2">Total</td><td class="n">' + fmt(totT,0) + '</td><td class="n">' + fmt(totI,0) + '</td><td class="n">' + fmt(totT + totI,0) + '</td></tr></tfoot></table>';
   $('#codesTable').innerHTML = h;
 
-  renderCerts(); renderGoods(); renderDiffs(); renderInvoices(); renderBank();
+  renderCerts(); renderGoods(); renderDiffs(); renderGL(); renderInvoices(); renderBank();
   const pc = priorChecks(M.perMI);
-  $('#priorCount').textContent = pc.length ? '· ' + pc.length + ' to review' : '';
-  $('#prior').innerHTML = (pc.length ? pc : [['ok', state.history.some(h => h.mi < M.perMI) ? 'No issues found in earlier months.' : 'No earlier months loaded.']]).map(([c, t]) => '<li class="' + c + '"><span class="mark"></span><span>' + t + '</span></li>').join('');
-  renderRules(); renderCodes();
+  M.prior = pc;
+  $('#priorCount').textContent = pc.length ? String(pc.length) : '';
+  const rank = {bad:0, warn:1, info:2, ok:3};
+  $('#prior').innerHTML = (pc.length ? pc.slice().sort((a, b) => rank[a[0]] - rank[b[0]]) : [['ok', state.history.some(h => h.mi < M.perMI) ? 'No issues found in earlier months.' : 'No earlier months loaded.']]).map(([c, t]) => '<li class="' + c + '"><span class="mark"></span><span>' + t + '</span></li>').join('');
+  renderRules(); renderCodes(); renderFiles(); renderOverview();
+  showTab(state.tab, false);
 }
 
 function renderGoods(){
@@ -923,6 +1389,7 @@ function renderGoods(){
     .filter(g => g.mi >= fyS && g.mi <= M.perMI);
   const by = new Map(); rows.forEach(g => { if (!by.has(g.vendor)) by.set(g.vendor, []); by.get(g.vendor).push(g); });
   const vendors = [...by.entries()].map(([v, list]) => ({v, list, total: sum(list, 'value')})).sort((a,b) => b.total - a.total);
+  M.goodsRows = vendors;
   let h = '<table><thead><tr><th>Seller</th><th class="n">Purchases this FY</th><th class="n">Left before ₹50 lakh</th><th class="n">TDS due at 0.1%</th><th>Status</th></tr></thead>';
   vendors.forEach(x => {
     const left = LIMIT - x.total, over = Math.max(0, -left), pct = x.total / LIMIT;
@@ -952,7 +1419,8 @@ function renderCerts(){
     const used = r2(before + thisMonth);
     return {r, ldc, limit, before, thisMonth, over, paidFY, used, left: limit ? r2(limit - used) : null};
   });
-  $('#certNote').textContent = rows.length ? fyLabel(M.perMI) + ' up to ' + monthLabel(M.perMI) + '. Amounts before GST.' : '';
+  M.certRows = rows;
+  $('#certNote').textContent = fyLabel(M.perMI) + ' up to ' + monthLabel(M.perMI) + '. Amounts are before GST.';
   if (!rows.length) { $('#certs').innerHTML = '<p class="empty">No certificates recorded. Add a lower rate in Vendor rules.</p>'; return; }
   let h = '<table><thead><tr><th>Vendor</th><th>Certificate</th><th class="n">Limit</th><th class="n">Used before ' + esc(monthLabel(M.perMI)) + '</th><th class="n">Used in ' + esc(monthLabel(M.perMI)) +
     '</th><th class="n">Left</th><th class="n">Paid to vendor this FY</th><th>Status</th></tr></thead><tbody>';
@@ -988,6 +1456,7 @@ function renderDiffs(){
   const noCert = new Map(); M.invs.filter(i => i.hasLdc && !i.cert).forEach(i => noCert.set(i.vendor, (noCert.get(i.vendor) || 0) + r2(i.ldcPart * (i.stat - i.rate) / 100)));
   noCert.forEach((amt, v) => rows.push(['warn', v, 'Lower rate used but no certificate number is recorded. Without a certificate this much more is due.', amt]));
   if (M.late) rows.push(['bad', 'All codes', 'The payment date is after the due date of ' + fdate(M.due) + ', so interest applies to every line.', null]);
+  M.diffRows = rows; $('#diffCount').textContent = rows.length ? String(rows.length) : '';
   if (!rows.length) { $('#diffs').innerHTML = '<p class="empty">No differences. AP deductions match the TDS due for every vendor.</p>'; return; }
   let h = '<table><thead><tr><th>Vendor</th><th>What to address</th><th class="n">Amount</th></tr></thead><tbody>';
   rows.forEach(([s, v, t, a]) => { h += '<tr class="sev-' + s + '"><td>' + esc(v) + '</td><td>' + esc(t) + '</td><td class="n">' + (a === null ? '—' : fmt(a)) + '</td></tr>'; });
@@ -1062,6 +1531,92 @@ function renderCodes(){
     h += '<tr><td><b>' + esc(secLabel(k)) + '</b></td><td>' + esc(SECTIONS[k].name) + '</td><td class="num">' + SECTIONS[k].rate + '%</td><td><input type="text" id="code-' + esc(k) + '" data-code="' + esc(k) + '" value="' + esc(state.codes[k] || '') + '" placeholder="e.g. 1024" style="width:90px"></td></tr>';
   });
   $('#codes').innerHTML = h + '</tbody>';
+}
+
+/* ---------- overview, files, tabs ---------- */
+const MONF = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const shortName = v => vendorDisplay(v).split(/\s+/).slice(0, 2).join(' ').replace(/\b(Private|Limited|Pvt|Ltd)\b.*$/i, '').trim();
+function renderOverview(){
+  const m = M.perMI;
+  $('#ovTitle').textContent = MONF[m % 12] + ' ' + Math.floor(m / 12);
+  $('#ovSub').textContent = ent().name + '. TDS deducted in ' + MONF[m % 12] + ', challan due ' + fdate(M.due) + '.';
+  const codes = byCode(curLines()), t = sum(codes, 'tdsR'), it = sum(codes, 'interestR');
+  $('#ovHero').innerHTML = '<div class="figure"><span class="eyebrow">Challan to pay</span><span class="big">' + rs(t + it, 0) + '</span></div>' +
+    '<div class="figure"><span class="eyebrow">TDS</span><span class="val">' + rs(t, 0) + '</span></div>' +
+    '<div class="figure"><span class="eyebrow">Interest</span><span class="val">' + rs(it, 0) + '</span></div>' +
+    '<div class="figure"><span class="eyebrow">Payment codes</span><span class="val">' + codes.length + '</span></div>' +
+    '<div class="end">' + (M.late ? chip('bad', 'Late: was due ' + fdate(M.due)) : chip('ok', 'Due ' + fdate(M.due))) +
+    '<button class="btn small" type="button" data-go="challan">Open challan</button></div>';
+
+  const card = (eyebrow, headline, line, status, go, goText) => '<article class="card ocard"><span class="eyebrow">' + eyebrow + '</span><span class="headline">' + headline + '</span>' +
+    '<p class="line">' + line + '</p><div class="row">' + status + '<button class="link" type="button" data-go="' + go + '">' + goText + ' →</button></div></article>';
+  const cards = [];
+
+  const d = M.diffRows || [], dBad = d.filter(r => r[0] === 'bad').length, short = sum(M.vendors, 'short');
+  cards.push(card('Differences', d.length ? d.length + ' to address' : 'None',
+    d.length ? (short ? esc(rs(short, 0)) + ' short deducted, paid by AXI with this challan. ' : '') + esc([...new Set(d.map(r => shortName(r[1])))].slice(0, 3).join(', ')) : 'AP deductions match the TDS due for every vendor.',
+    dBad ? chip('bad', 'Action needed') : d.length ? chip('warn', 'Review') : chip('ok', 'Clear'), 'challan', 'Review'));
+
+  const G = M.gl, office = ent().gl.office;
+  if (!G) cards.push(card('GL reconciliation', 'Not loaded', 'Upload the 250500 WHT payable GL for office ' + esc(office) + ' to reconcile it.', chip('info', 'No GL'), 'data', 'Add the GL'));
+  else {
+    const E = G.ends, end = E[E.length - 1], od = G.openDiff;
+    const done = E.slice(1).filter(e => !e.pending && !e.missing), agree = done.filter(e => Math.abs(e.newUn) <= TOL).length, bad = done.length - agree;
+    const odOpen = od !== null && Math.abs(od) > TOL;
+    cards.push(card('GL reconciliation', odOpen ? esc(rs(od, 0)) : bad ? bad + ' unexplained' : 'Reconciled',
+      (odOpen ? 'Opening difference carried from ' + fyOf(E[0].m) + '. ' : '') + agree + ' of ' + done.length + ' month-ends agree' + (end.pending && end.expected !== null ? '; next challan ' + esc(rs(end.expected, 0)) + '.' : '.'),
+      bad ? chip('bad', 'Unexplained') : odOpen || end.carried ? chip('warn', 'Items carried') : chip('ok', 'Reconciled'), 'gl', 'Open reconciliation'));
+  }
+
+  const flags = [];
+  (M.certRows || []).forEach(x => {
+    if (x.over > 0 || (x.limit && x.left <= 0)) flags.push(['bad', shortName(x.r.vendor) + ' certificate used up']);
+    else if (x.limit && x.left < x.limit * 0.2) flags.push(['warn', shortName(x.r.vendor) + ' certificate ' + Math.round(x.used / x.limit * 100) + '% used']);
+  });
+  (M.goodsRows || []).forEach(x => {
+    const pct = x.total / 5000000;
+    if (pct >= 1) flags.push(['bad', shortName(x.v) + ' over the 194Q limit']);
+    else if (pct >= 0.8) flags.push(['warn', shortName(x.v) + ' at ' + Math.round(pct * 100) + '% of the 194Q limit']);
+  });
+  const fBad = flags.some(f => f[0] === 'bad');
+  cards.push(card('Certificates and 194Q', flags.length ? flags.length + ' to watch' : 'Within limits',
+    flags.length ? esc(flags.slice(0, 2).map(f => f[1]).join('; ')) + '.' : (M.certRows || []).length + ' certificates and ' + (M.goodsRows || []).length + ' goods sellers tracked.',
+    fBad ? chip('bad', 'Limit reached') : flags.length ? chip('warn', 'Near a limit') : chip('ok', 'Within limits'), 'limits', 'Open limits'));
+
+  const pc = M.prior || [], pBad = pc.filter(p => p[0] === 'bad').length;
+  cards.push(card('Earlier months', pc.length ? pc.length + ' to review' : 'No issues',
+    pc.length ? (pBad ? pBad + ' need action, ' : '') + (pc.length - pBad) + ' to check, from the advisor\'s summaries since April.' : 'The advisor\'s summaries since April pass the vendor rules and certificates.',
+    pBad ? chip('bad', 'Action needed') : pc.length ? chip('warn', 'Review') : chip('ok', 'Clear'), 'checks', 'Open checks'));
+  $('#ovCards').innerHTML = cards.join('');
+}
+
+function renderFiles(){
+  const st = s => s === 'loaded' ? chip('ok', 'Loaded') : s === 'sample' ? chip('info', 'Sample') : chip('warn', 'Not loaded');
+  const g = state.gl, cfg = ent().gl;
+  const glSrc = !g ? {status:'missing', detail:'Upload the 250500 General Ledger report from Sage Intacct'}
+    : {status: g.uploaded ? 'loaded' : 'sample', name: g.uploaded ? g.file : 'Intacct GL report, April to September 2026', detail: g.rows.length + ' lines' + (g.uploaded ? ', kept in this browser' : '')};
+  const up = id => '<label for="' + id + '" class="btn small">Upload</label>';
+  const rows = [
+    ['Concur invoice extract', state.srcInv, up('file')],
+    ['Bank statement', state.srcBank, up('file')],
+    ['WHT payable GL · account 250500 · office ' + cfg.office, glSrc, up('glFile') + (g && g.uploaded ? '<button class="btn small" type="button" data-act="gl-reset">Remove</button>' : '')]
+  ];
+  $('#files').innerHTML = rows.map(([t, s, a]) => '<li><div class="what"><b>' + esc(t) + '</b><div class="dim">' + esc([s.name, s.detail].filter(Boolean).join(' · ')) + '</div></div>' +
+    st(s.status) + '<div class="acts">' + a + '</div></li>').join('');
+  $('#sampleChip').hidden = ![state.srcInv.status, state.srcBank.status, glSrc.status].includes('sample');
+}
+
+const TABS = ['overview', 'challan', 'gl', 'limits', 'checks', 'data'];
+function showTab(name, user){
+  if (!TABS.includes(name)) name = 'overview';
+  const changed = state.tab !== name; state.tab = name;
+  document.querySelectorAll('#tabs [data-tab]').forEach(b => { const on = b.dataset.tab === name; b.setAttribute('aria-selected', String(on)); b.tabIndex = on ? 0 : -1; });
+  TABS.forEach(t => { $('#p-' + t).hidden = t !== name; });
+  if (user) {
+    try { localStorage.setItem('tdsdesk.tab', name); } catch(e){}
+    try { history.replaceState(null, '', '#' + name); } catch(e){}
+    if (changed) window.scrollTo(0, 0);
+  }
 }
 
 /* ---------- copy ---------- */
@@ -1139,11 +1694,29 @@ $('#saveMonth').addEventListener('click', () => {
   toast(monthLabel(M.perMI) + ' saved to the year');
 });
 
+$('#glFile').addEventListener('change', e => { if (e.target.files.length) readFiles([...e.target.files]); e.target.value = ''; });
+$('#files').addEventListener('click', e => {
+  if (!e.target.closest('[data-act="gl-reset"]')) return;
+  store('gl', null); loadGL(); render(); toast(ent().gl.sample ? 'Upload removed; sample GL restored' : 'Upload removed');
+});
+$('#tabs').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (b) showTab(b.dataset.tab, true); });
+$('#tabs').addEventListener('keydown', e => {
+  if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+  const i = TABS.indexOf(state.tab), n = TABS[(i + (e.key === 'ArrowRight' ? 1 : TABS.length - 1)) % TABS.length];
+  showTab(n, true); $('#tab-' + n).focus(); e.preventDefault();
+});
+document.addEventListener('click', e => { const g = e.target.closest('[data-go]'); if (g) showTab(g.dataset.go, true); });
+$('#sampleChip').addEventListener('click', () => showTab('data', true));
+$('#glOpen').addEventListener('change', e => {
+  const v = e.target.value.trim(); state.glOpen = v === '' || isNaN(+v) ? null : +v; store('glOpen', state.glOpen); render();
+});
+
 $('#entitySeg').addEventListener('click', e => {
   const b = e.target.closest('button[data-entity]'); if (!b || b.dataset.entity === currentEntity) return;
   loadEntity(b.dataset.entity); render(); toast('Switched to ' + ent().name);
 });
 
+state.tab = (() => { const h = location.hash.slice(1); if (TABS.includes(h)) return h; try { return localStorage.getItem('tdsdesk.tab') || 'overview'; } catch(e){ return 'overview'; } })();
 loadEntity(recall('entity', 'tech'));
 render();
 })();
