@@ -126,6 +126,7 @@ tfoot td{font-weight:600;background:var(--sunk);border-top:1px solid var(--line)
 td.desc{max-width:280px;min-width:180px;color:var(--muted)}
 tr.grp td{background:var(--sunk);font-weight:600;font-family:var(--f-display);font-size:.9rem}
 td select{max-width:190px}
+td input.base-in{width:8.5em;text-align:right;font-variant-numeric:tabular-nums}
 .code{font-family:var(--f-mono);font-size:.8rem;background:var(--sunk);border:1px solid var(--line);border-radius:4px;padding:1px 6px}
 .code-btn{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:10px;border-radius:4px}
 .code-btn .caret{display:inline-block;width:0;height:0;border-left:5px solid var(--muted);border-top:4px solid transparent;border-bottom:4px solid transparent;transition:transform .15s}
@@ -455,13 +456,14 @@ const SECTIONS = {
   'NIL':       {name:'No TDS (goods and similar)', rate:0, rule:'none'}
 };
 const DEFAULT_CODES = {'194C':'1024','194C-ind':'1023','194J-tech':'1026','194J-prof':'1027','194-I(a)':'1008','194-I(b)':'1009','194H':'','NIL':''};
-const BLANK_RULE = {vendor:'', keyword:'', section:'194C', ldc:'', cert:'', ldcFrom:'', ldcLimit:'', ldcUsed:'', fyOver:false, bank:''};
+const BLANK_RULE = {vendor:'', keyword:'', section:'194C', ldc:'', cert:'', ldcFrom:'', ldcTo:'', ldcLimit:'', ldcUsed:'', fyOver:false, bank:''};
 const DEFAULT_RULES = [
   {vendor:'computer junction', section:'194-I(a)'},
   {vendor:'indiqube', keyword:'rent', section:'194-I(b)', ldc:'1', cert:'1AB0326XYI', ldcFrom:'2026-04-01', ldcLimit:'44871000'},
   {vendor:'indiqube', keyword:'data management', section:'194J-tech', fyOver:true},
   {vendor:'indiqube', section:'194C', fyOver:true},
-  {vendor:'swai', section:'194C', ldc:'1', cert:'1NB0526BXL', ldcFrom:'2026-05-25', ldcLimit:'50000000'},
+  // SWAI's ₹5 crore certificate was used up in September 2026, so bills dated after ldcTo are at the full rate
+  {vendor:'swai', section:'194C', ldc:'1', cert:'1NB0526BXL', ldcFrom:'2026-05-25', ldcLimit:'50000000', ldcTo:'2026-09-30'},
   {vendor:'mispras', section:'194-I(b)', ldc:'4.01', cert:'1AC0326HYR', ldcFrom:'2026-04-01', ldcLimit:'18265920'},
   {vendor:'indeed', section:'194C'},
   {vendor:'info edge', section:'194J-prof'},
@@ -475,6 +477,8 @@ const DEFAULT_RULES = [
   {vendor:'fun and joy', section:'194C-ind'},
   {vendor:'wep solutions', section:'194-I(a)'},
   {vendor:'onlineteksupport', section:'194C'},
+  {vendor:'kalakarah', section:'194C'},
+  {vendor:'marudhar', section:'NIL'},
   {vendor:'atria convergence', section:'194C'},
   {vendor:'icici lombard', section:'NIL'},
   {vendor:'consolidated teknics', section:'NIL'}
@@ -1009,7 +1013,7 @@ function loadSample(){
 function loadEntity(key){
   currentEntity = ENTITIES[key] ? key : 'tech';
   store('entity', currentEntity);
-  state.rules = (recall('rules9', null) || ent().rules).map(r => ({...BLANK_RULE, ...r}));
+  state.rules = (recall('rules10', null) || ent().rules).map(r => ({...BLANK_RULE, ...r}));
   state.codes = Object.assign({}, DEFAULT_CODES, recall('codes2', {}));
   state.overrides = recall('overrides', {});
   state.view = 'cur'; state.open = new Set();
@@ -1034,12 +1038,12 @@ function parseWorkbook(wb){
       const h = rows[hi].map(norm);
       const c = {vendor:col(h,'vendor name'), num:col(h,'invoice number'), name:col(h,'invoice name'), date:col(h,'invoice date'),
         amt:col(h,'invoice amount','request total'), tax:col(h,'tax','tax amount','gst'), desc:col(h,'description','purpose'),
-        wht:col(h,'whtax','wh tax','wht'), pct:col(h,'percentage'), ent:col(h,'custom 01 entity','entity')};
+        wht:col(h,'whtax','wh tax','wht'), pct:col(h,'percentage'), ent:col(h,'custom 01 entity','entity'), made:col(h,'create date')};
       rows.slice(hi + 1).forEach(r => {
         const vendor = String(r[c.vendor] ?? '').trim(); const amount = toNum(r[c.amt]);
         if (!vendor || !amount) return;
         const number = String((c.num >= 0 && r[c.num]) || (c.name >= 0 && r[c.name]) || '').trim();
-        out.invoices.push({vendor, number, date: c.date >= 0 ? toDate(r[c.date]) : null, amount, tax: c.tax >= 0 ? toNum(r[c.tax]) : 0,
+        out.invoices.push({vendor, number, date: c.date >= 0 ? toDate(r[c.date]) : null, booked: c.made >= 0 ? toDate(r[c.made]) : null, amount, tax: c.tax >= 0 ? toNum(r[c.tax]) : 0,
           desc: c.desc >= 0 ? String(r[c.desc] ?? '') : '', key: norm(vendor) + '|' + number,
           apWht: c.wht >= 0 ? toNum(r[c.wht]) : null, apRate: c.pct >= 0 ? String(r[c.pct] ?? '').trim() : '', entity: c.ent >= 0 ? String(r[c.ent] ?? '').trim() : ''});
       });
@@ -1366,8 +1370,9 @@ function renderGL(){
 /* ---------- classification ---------- */
 function vendorRules(vendor){ const v = norm(vendor); return state.rules.filter(r => r.vendor && v.includes(norm(r.vendor))); }
 function classify(inv){
-  const rules = vendorRules(inv.vendor); const d = norm(inv.desc);
-  const kw = rules.filter(r => r.keyword && d.includes(norm(r.keyword))).sort((a,b) => b.keyword.length - a.keyword.length)[0];
+  // Keywords match whole words, so "rent" does not catch "rental" of a vending machine
+  const rules = vendorRules(inv.vendor); const d = ' ' + norm(inv.desc) + ' ';
+  const kw = rules.filter(r => r.keyword && d.includes(' ' + norm(r.keyword) + ' ')).sort((a,b) => b.keyword.length - a.keyword.length)[0];
   const rule = kw || rules.find(r => !r.keyword) || null;
   const ov = state.overrides[inv.key];
   return {rule, section: (ov && ov.section) || (rule && rule.section) || '', overridden: !!(ov && ov.section)};
@@ -1398,14 +1403,38 @@ function certUsage(rule, perMI){
 }
 
 /* ---------- computation ---------- */
+// Each payment settles the invoice or group of invoices whose total, less the payment, looks most like the TDS due on them
+// (largest payments first; held-back amount between nil and about 10% of the invoices). Up to 12 open invoices per vendor are tried.
+function matchPayments(list, rows){
+  const open = list.slice(), paid = [], used = [];
+  rows.slice().sort((a,b) => b.debit - a.debit).forEach(b => {
+    const n = Math.min(open.length, 12); let best = null;
+    for (let mask = 1; mask < (1 << n); mask++) {
+      let amt = 0, due = 0;
+      for (let k = 0; k < n; k++) if (mask & (1 << k)) { amt += open[k].amount; due += open[k].sec && open[k].sec.rate > 0 ? open[k].full : 0; }
+      const held = amt - b.debit;
+      if (held < -TOL || held > amt * 0.11 + TOL) continue;
+      const gap = Math.abs(held - due);
+      if (!best || gap < best.gap - 0.005) best = {gap, mask};
+    }
+    if (!best) return;
+    open.filter((i, k) => k < n && best.mask & (1 << k)).forEach(i => { open.splice(open.indexOf(i), 1); paid.push(i); });
+    used.push(b);
+  });
+  return {paid, unpaid: open, used};
+}
 function compute(){
   const S = state.settings;
   const invs = state.invoices.map(inv => {
     const c = classify(inv); const sec = SECTIONS[c.section] || null;
-    const base = r2(inv.amount - inv.tax); const stat = sec ? sec.rate : 0;
+    // TDS base can be set per invoice where a bill mixes goods (no TDS) with services
+    const ov = state.overrides[inv.key]; const baseSet = !!(ov && ov.base != null);
+    const base = baseSet ? r2(ov.base) : r2(inv.amount - inv.tax); const stat = sec ? sec.rate : 0;
     const ldc = ruleLdc(c.rule); const from = c.rule ? toDate(c.rule.ldcFrom) : null;
     const preCert = !!(ldc !== null && from && inv.date && inv.date < from);
-    const hasLdc = !!(sec && sec.rate > 0 && ldc !== null && ldc !== stat && !preCert);
+    // ldcTo: last bill date the certificate covers (it ended, or its limit was used up)
+    const to = c.rule ? toDate(c.rule.ldcTo) : null; const postCert = !!(ldc !== null && to && inv.date && inv.date > to);
+    const hasLdc = !!(sec && sec.rate > 0 && ldc !== null && ldc !== stat && !preCert && !postCert);
     const rate = hasLdc ? ldc : stat;
     let below = false, belowNote = '';
     if (sec && sec.rate > 0 && S.thresholds && !(c.rule && c.rule.fyOver)) {
@@ -1413,7 +1442,7 @@ function compute(){
       if (sec.rule === 'single' && base <= sec.single) { below = true; belowNote = 'Under ₹30,000 per bill. Check the FY total stays under ₹1,00,000'; }
       if (sec.rule === 'annual' && base <= sec.annual) { below = true; belowNote = 'Under ₹' + fmt(sec.annual,0) + ' for the year. Check the FY total'; }
     }
-    return {...inv, ...c, sec, base, stat, rate, hasLdc, preCert, cert: c.rule ? String(c.rule.cert || '').trim() : '', below, belowNote,
+    return {...inv, ...c, sec, base, baseSet, stat, rate, hasLdc, preCert, postCert, cert: c.rule ? String(c.rule.cert || '').trim() : '', below, belowNote,
       ldcPart: hasLdc ? base : 0, overLimit: 0, full: 0, tds: 0, voluntary: false, interest: 0, months: 0};
   });
 
@@ -1455,13 +1484,19 @@ function compute(){
   invs.forEach(i => { i.full = r2((i.ldcPart * i.rate + (i.base - i.ldcPart) * i.stat) / 100); i.tds = i.below ? 0 : i.full; });
 
   vendors.forEach(v => {
-    const list = v.list, rows = v.rows;
-    v.total = r2(sum(list, 'amount')); v.paid = r2(sum(rows, 'debit'));
-    const A = r2(sum(list, 'tds')); const B = r2(sum(list, i => i.sec && i.sec.rate > 0 ? i.full : 0));
-    v.D = rows.length ? r2(v.total - v.paid) : null; v.excess = 0; v.short = 0;
+    const list = v.list;
+    // Compare only the invoices a payment settles: unpaid invoices would otherwise look like tax held back,
+    // and payments for earlier months' invoices are left for "Other bank debits"
+    const m = matchPayments(list, v.rows);
+    if (state.bank.length) m.unpaid.forEach(i => { i.unpaid = true; });
+    v.rows.filter(b => !m.used.includes(b)).forEach(b => { b.vendor = null; });
+    const paidInv = m.paid; v.rows = m.used; v.unpaid = m.unpaid;
+    v.total = r2(sum(paidInv, 'amount')); v.paid = r2(sum(m.used, 'debit'));
+    const A = r2(sum(paidInv, 'tds')); const B = r2(sum(paidInv, i => i.sec && i.sec.rate > 0 ? i.full : 0));
+    v.D = paidInv.length ? r2(v.total - v.paid) : null; v.excess = 0; v.short = 0; v.duePaid = A;
     if (v.D === null) v.status = state.bank.length ? 'nobank' : 'nofile';
     else if (Math.abs(v.D - A) <= TOL) v.status = 'match';
-    else if (B !== A && Math.abs(v.D - B) <= TOL) { list.forEach(i => { if (i.below && i.full > 0) { i.tds = i.full; i.voluntary = true; } }); v.status = 'voluntary'; }
+    else if (B !== A && Math.abs(v.D - B) <= TOL) { paidInv.forEach(i => { if (i.below && i.full > 0) { i.tds = i.full; i.voluntary = true; } }); v.status = 'voluntary'; }
     else if (v.D > A) { v.excess = r2(v.D - A); v.status = 'excess'; }
     else { v.short = r2(A - v.D); v.status = 'short'; }
     const bySec = {}; list.forEach(i => { if (i.sec && i.sec.rate > 0) bySec[i.section] = (bySec[i.section] || 0) + i.base; });
@@ -1470,8 +1505,10 @@ function compute(){
   });
 
   invs.forEach(i => {
-    if (i.tds > 0 && i.date) {
-      const imi = mi(i.date);
+    // TDS falls due when the bill is booked; the Concur create date stands in for that, else the invoice date
+    const when = i.booked || i.date;
+    if (i.tds > 0 && when) {
+      const imi = mi(when);
       if (imi < perMI || late) { i.months = Math.max(1, payMI - imi + 1); i.interest = Math.round(Math.round(i.tds) * S.rate / 100 * i.months); }
     }
   });
@@ -1733,9 +1770,9 @@ function renderDiffs(){
     if (over > 0) why.push(rs(over,0) + ' is over the certificate limit, so the full rate applies');
     const hasCertRule = vendorRules(v.name).some(r => ruleLdc(r) !== null);
     if (hasCertRule && v.list.some(i => i.hasLdc) && v.list.some(i => !i.hasLdc && i.tds > 0)) why.push('some bills are not covered by the certificate and need the normal rate');
-    if (v.status === 'short') rows.push(['bad', v.name, 'AP deducted ' + rs(v.D) + '; ' + rs(v.tds) + ' is due' + (why.length ? ': ' + why.join('; ') : '') + '. AXI pays the difference and recovers it from the next payment.', v.short]);
-    if (v.status === 'excess') rows.push(['warn', v.name, 'AP deducted ' + rs(v.D) + '; only ' + rs(v.tds) + ' is due. The extra is still deposited because the vendor will claim it.', v.excess]);
-    if (v.status === 'nobank') rows.push(['warn', v.name, 'No payment found in the bank file, so TDS is worked out from the invoices only.', null]);
+    if (v.status === 'short') rows.push(['bad', v.name, 'AP deducted ' + rs(v.D) + ' on the bills paid; ' + rs(v.duePaid) + ' is due' + (why.length ? ': ' + why.join('; ') : '') + '. AXI pays the difference and recovers it from the next payment.', v.short]);
+    if (v.status === 'excess') rows.push(['warn', v.name, 'AP deducted ' + rs(v.D) + ' on the bills paid; only ' + rs(v.duePaid) + ' is due. The extra is still deposited because the vendor will claim it.', v.excess]);
+    if (v.status === 'nobank') rows.push(['warn', v.name, state.bank.length ? 'Not paid in this bank file. TDS is still due this month, because it falls due when the bill is booked.' : 'No payment found in the bank file, so TDS is worked out from the invoices only.', null]);
   });
   M.invs.filter(i => !i.sec).forEach(i => rows.push(['bad', i.vendor, 'Invoice ' + i.number + ' has no TDS section. Set one in Invoice detail or Vendor rules.', null]));
   const noCert = new Map(); M.invs.filter(i => i.hasLdc && !i.cert).forEach(i => noCert.set(i.vendor, (noCert.get(i.vendor) || 0) + r2(i.ldcPart * (i.stat - i.rate) / 100)));
@@ -1761,12 +1798,16 @@ function renderInvoices(){
       if (i.hasLdc) notes.push(chip(i.cert ? 'info' : 'warn', i.cert ? 'Certificate ' + i.cert : 'Lower rate, no certificate'));
       if (i.overLimit > 0) notes.push(chip('bad', rs(i.overLimit, 0) + ' over certificate limit'));
       if (i.preCert) notes.push(chip('warn', 'Dated before certificate start'));
+      if (i.postCert) notes.push(chip('info', 'Certificate used up; full rate'));
       if (i.below && !i.voluntary) notes.push(chip('info', i.belowNote));
       if (i.voluntary) notes.push(chip('info', 'Under limit, deducted anyway'));
       if (i.months) notes.push(chip('warn', i.months + ' month' + (i.months > 1 ? 's' : '') + ' interest'));
       if (i.overridden) notes.push(chip('info', 'Section set manually'));
+      if (i.baseSet) notes.push(chip('info', 'TDS base set manually'));
+      if (i.unpaid) notes.push(chip('info', 'Not paid yet; TDS still due'));
       if (!i.sec) notes.push(chip('bad', 'No section'));
-      h += '<tr><td>' + esc(i.number) + '</td><td class="num">' + fdate(i.date) + '</td><td class="desc">' + esc(i.desc) + '</td><td class="n">' + fmt(i.base) + '</td><td class="n">' + fmt(i.tax) +
+      h += '<tr><td>' + esc(i.number) + '</td><td class="num">' + fdate(i.date) + '</td><td class="desc">' + esc(i.desc) + '</td><td class="n"><input class="base-in" type="number" step="0.01" min="0" value="' + i.base + '" data-bkey="' + esc(i.key) +
+        '" title="TDS base. Change it when part of the bill is goods" aria-label="TDS base for ' + esc(i.number) + '"></td><td class="n">' + fmt(i.tax) +
         '</td><td><select id="sec-' + esc(i.key) + '" data-key="' + esc(i.key) + '" aria-label="TDS section for ' + esc(i.number) + '">' + opts(i.section) + '</select></td><td class="n">' + (i.sec ? (i.overLimit > 0 ? 'mixed' : i.rate + '%') : '—') +
         '</td><td class="n">' + fmt(i.tds) + '</td><td class="n">' + (i.interest ? fmt(i.interest,0) : '—') + '</td><td><div class="chips">' + notes.join('') + '</div></td></tr>';
     });
@@ -2262,20 +2303,26 @@ $('#rate').addEventListener('change', e => { state.settings.rate = +e.target.val
 $('#thr').addEventListener('change', e => { state.settings.thresholds = e.target.checked; render(); });
 
 $('#invoices').addEventListener('change', e => {
-  const k = e.target.dataset.key; if (!k) return;
-  if (e.target.value) state.overrides[k] = {section: e.target.value}; else delete state.overrides[k];
+  const bk = e.target.dataset.bkey, k = e.target.dataset.key || bk; if (!k) return;
+  const o = {...(state.overrides[k] || {})};
+  if (bk) {
+    // An empty box or the full amount before GST puts the base back to normal
+    const inv = state.invoices.find(x => x.key === k); const v = e.target.value === '' ? null : toNum(e.target.value);
+    if (v === null || (inv && near(v, r2(inv.amount - inv.tax), 0.005))) delete o.base; else o.base = v;
+  } else if (e.target.value) o.section = e.target.value; else delete o.section;
+  if (Object.keys(o).length) state.overrides[k] = o; else delete state.overrides[k];
   store('overrides', state.overrides); render();
 });
 $('#master').addEventListener('change', e => {
   const i = e.target.dataset.i, f = e.target.dataset.f; if (i === undefined) return;
-  state.rules[+i][f] = e.target.type === 'checkbox' ? e.target.checked : e.target.value.trim(); store('rules9', state.rules); render();
+  state.rules[+i][f] = e.target.type === 'checkbox' ? e.target.checked : e.target.value.trim(); store('rules10', state.rules); render();
 });
 $('#master').addEventListener('click', e => {
   const d = e.target.dataset.del; if (d === undefined) return;
-  state.rules.splice(+d, 1); store('rules9', state.rules); render();
+  state.rules.splice(+d, 1); store('rules10', state.rules); render();
 });
-$('#addRule').addEventListener('click', () => { state.rules.push({...BLANK_RULE}); store('rules9', state.rules); renderRules(); });
-$('#resetRules').addEventListener('click', () => { state.rules = ent().rules.map(r => ({...BLANK_RULE, ...r})); state.overrides = {}; store('rules9', state.rules); store('overrides', {}); render(); toast('Default rules restored'); });
+$('#addRule').addEventListener('click', () => { state.rules.push({...BLANK_RULE}); store('rules10', state.rules); renderRules(); });
+$('#resetRules').addEventListener('click', () => { state.rules = ent().rules.map(r => ({...BLANK_RULE, ...r})); state.overrides = {}; store('rules10', state.rules); store('overrides', {}); render(); toast('Default rules restored'); });
 $('#codes').addEventListener('change', e => { const k = e.target.dataset.code; if (!k) return; state.codes[k] = e.target.value.trim(); store('codes2', state.codes); render(); });
 $('#saveMonth').addEventListener('click', () => {
   const month = Math.floor(M.perMI / 12) + '-' + String(M.perMI % 12 + 1).padStart(2,'0');
