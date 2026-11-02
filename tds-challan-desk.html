@@ -241,7 +241,7 @@ details.card > .inner{padding:0 18px 18px;display:flex;flex-direction:column;gap
     </div>
     <div class="bar-end">
       <button class="pill" id="sampleChip" type="button" hidden>Sample data in use</button>
-      <input type="file" id="file" class="vh" multiple accept=".xlsx,.xls,.xlsm,.csv">
+      <input type="file" id="file" class="vh" multiple accept=".xlsx,.xls,.xlsm,.csv,.pdf">
       <input type="file" id="glFile" class="vh" accept=".csv,.xlsx,.xls" tabindex="-1">
       <label for="file" class="btn primary" id="drop">Upload files</label>
     </div>
@@ -395,6 +395,10 @@ details.card > .inner{padding:0 18px 18px;display:flex;flex-direction:column;gap
       <div class="block-head"><h2>Files in use</h2></div>
       <div class="card"><ul class="files" id="files"></ul></div>
     </div>
+    <div class="block">
+      <div class="block-head"><h2>Copies of uploads</h2></div>
+      <div class="card"><ul class="files"><li id="vault"></li></ul></div>
+    </div>
     <div class="folds">
       <details class="card" id="pBank">
         <summary>Other bank debits <span class="dim" id="bankCount"></span></summary>
@@ -483,6 +487,7 @@ const GOODS = [
   ['2026-07','Onlineteksupport IT Solutions Private Limited','BLR2627IN001005','2026-07-01',279100,'Monitors, webcam, speaker'],
   ['2026-07','Onlineteksupport IT Solutions Private Limited','BLR2627PI000271 (proforma, PO2789)','2026-07-11',1382000,'Laptops - PO bills AxiCorp Australia, ships to AXI Digital'],
   ['2026-08','Onlineteksupport IT Solutions Private Limited','BLR2627PI000315 (proforma, PO2798)','2026-07-28',298299,'MacBook - ships to AXI Technologies and AXI Digital'],
+  ['2026-10','Onlineteksupport IT Solutions Private Limited','BLR2627IN002289 (PO2810)','2026-10-13',862797,'3 MacBook Pro, headsets, backpacks (AppleCare ₹70,500 is a service, not goods)'],
   ['2026-06','Indiqube Spaces Limited','KA/JUN26/1632','2026-06-24',200640,'CCTV hardware (fit-out)'],
   ['2026-07','Indiqube Spaces Limited','KA/JUL26/1808','2026-07-29',1087958,'AV equipment (fit-out)'],
   ['2026-07','Indiqube Spaces Limited','KA/JUL26/1791','2026-07-28',2917156,'Network hardware (fit-out); licences Rs 3,41,666 excluded'],
@@ -968,8 +973,11 @@ const ENTITIES = {
       {vendor:'moengage', section:'194J-tech'},
       {vendor:'swai', section:'194C'},
       {vendor:'nangia', section:'194J-prof'},
-      {vendor:'brigade hotel', section:'194C', fyOver:true, bank:'holiday'},
-      {vendor:'holiday inn', section:'194C', fyOver:true},
+      {vendor:'brigade hotel', section:'NIL', bank:'holiday'},
+      {vendor:'holiday inn', section:'NIL'},
+      {vendor:'icici lombard', section:'NIL'},
+      {vendor:'kotak mahindra life', section:'NIL'},
+      {vendor:'plum benefits', section:'NIL'},
       {vendor:'mispras', section:'194-I(b)'},
       {vendor:'airtel', section:'NIL'},
       {vendor:'anthropic', section:'NIL'},
@@ -1001,7 +1009,7 @@ function loadSample(){
 function loadEntity(key){
   currentEntity = ENTITIES[key] ? key : 'tech';
   store('entity', currentEntity);
-  state.rules = (recall('rules8', null) || ent().rules).map(r => ({...BLANK_RULE, ...r}));
+  state.rules = (recall('rules9', null) || ent().rules).map(r => ({...BLANK_RULE, ...r}));
   state.codes = Object.assign({}, DEFAULT_CODES, recall('codes2', {}));
   state.overrides = recall('overrides', {});
   state.view = 'cur'; state.open = new Set();
@@ -1052,10 +1060,18 @@ function parseWorkbook(wb){
 }
 
 async function readFiles(files){
+  const loaded = await readSheets(files);
+  // Copies go to the month under review: the one worked out from a new invoice list, else last month
+  const m = loaded ? M.perMI : mi(new Date()) - 1;
+  vaultSave(files, monthKey(m), loaded ? {name: 'review-' + monthKey(m) + '.json', text: reviewJson()} : null);
+}
+async function readSheets(files){
   const err = $('#error'); err.hidden = true;
-  if (typeof XLSX === 'undefined') { err.textContent = 'The spreadsheet reader did not load. Check your connection and reload the page.'; err.hidden = false; return; }
-  const inv = [], bank = [], names = []; let glDone = false;
+  if (typeof XLSX === 'undefined') { err.textContent = 'The spreadsheet reader did not load. Check your connection and reload the page.'; err.hidden = false; return false; }
+  const inv = [], bank = [], names = []; let glDone = false, kept = 0;
   for (const f of files) {
+    // PDF invoices are only kept as copies
+    if (!/\.(xlsx|xls|xlsm|csv)$/i.test(f.name)) { kept++; continue; }
     try {
       // Intacct GL reports use dd/mm/yyyy, so CSVs are read as plain text to stop the reader turning 01/04 into 4 January
       if (/\.csv$/i.test(f.name)) {
@@ -1067,7 +1083,7 @@ async function readFiles(files){
       const p = parseWorkbook(wb); inv.push(...p.invoices); bank.push(...p.bank); names.push(f.name);
     } catch (e) { err.textContent = 'Could not read ' + f.name + '. Save it as .xlsx or .csv and try again.'; err.hidden = false; return; }
   }
-  if (!inv.length && glDone) return;
+  if (!inv.length && (glDone || kept)) return false;
   if (!inv.length) {
     err.textContent = 'No invoice list found. The file needs a sheet with "Vendor Name", "Invoice Amount" and "Tax" columns (the Concur Invoices tab).';
     err.hidden = false; return;
@@ -1078,6 +1094,76 @@ async function readFiles(files){
   state.settings.period = null; state.settings.payDate = iso(new Date()); state.view = 'cur';
   render();
   toast('File loaded');
+  return true;
+}
+
+/* ---------- copies of uploads ---------- */
+// Edge and Chrome can write to a folder picked once; its handle is kept in IndexedDB. Files land in <entity>/<yyyy-mm>/.
+// Browsers ask again for permission each session, so uploads wait in `pending` until the folder is allowed.
+const vault = {handle: null, perm: 'none', pending: [], ok: typeof window.showDirectoryPicker === 'function' && window.self === window.top};
+const VAULT_DIRS = {tech: 'AXI Technologies (AUS045)', digital: 'AXI Digital (AUS055)'};
+function idb(mode, fn){
+  return new Promise((res, rej) => {
+    const o = indexedDB.open('tdsdesk', 1);
+    o.onupgradeneeded = () => o.result.createObjectStore('kv'); o.onerror = () => rej(o.error);
+    o.onsuccess = () => { const tx = o.result.transaction('kv', mode); const r = fn(tx.objectStore('kv')); tx.oncomplete = () => res(r.result); tx.onerror = () => rej(tx.error); };
+  });
+}
+async function vaultInit(){
+  if (!vault.ok) return renderVault();
+  try { vault.handle = (await idb('readonly', s => s.get('folder'))) || null; if (vault.handle) vault.perm = await vault.handle.queryPermission({mode:'readwrite'}); } catch(e){}
+  renderVault();
+}
+async function vaultPick(){
+  try {
+    vault.handle = await window.showDirectoryPicker({id:'tdsdesk', mode:'readwrite'}); vault.perm = 'granted';
+    await idb('readwrite', s => s.put(vault.handle, 'folder'));
+    await vaultFlush();
+  } catch(e){ if (e.name !== 'AbortError') toast('Could not use that folder'); }
+  renderVault();
+}
+async function vaultAllow(){
+  try { vault.perm = await vault.handle.requestPermission({mode:'readwrite'}); } catch(e){}
+  if (vault.perm === 'granted') await vaultFlush();
+  renderVault();
+}
+async function vaultSave(files, month, extra){
+  if (!vault.ok) return;
+  vault.pending.push({files, month, entity: currentEntity, extra});
+  if (vault.handle && vault.perm !== 'granted') { try { vault.perm = await vault.handle.queryPermission({mode:'readwrite'}); } catch(e){} }
+  if (vault.perm === 'granted') await vaultFlush();
+  else { renderVault(); toast(vault.handle ? 'Allow the uploads folder on Files & rules to save copies' : 'Choose an uploads folder on Files & rules to save copies'); }
+}
+async function vaultFlush(){
+  const jobs = vault.pending.splice(0); let n = 0;
+  const put = async (dir, name, data) => { const w = await (await dir.getFileHandle(name, {create:true})).createWritable(); await w.write(data); await w.close(); };
+  for (const j of jobs) {
+    try {
+      const dir = await (await vault.handle.getDirectoryHandle(VAULT_DIRS[j.entity], {create:true})).getDirectoryHandle(j.month, {create:true});
+      for (const f of j.files) { await put(dir, f.name, f); n++; }
+      if (j.extra) await put(dir, j.extra.name, j.extra.text);
+    } catch(e){ vault.pending.push(j); }
+  }
+  if (n) toast(n + ' file' + (n > 1 ? 's' : '') + ' copied to ' + vault.handle.name);
+  renderVault();
+}
+function reviewJson(){
+  return JSON.stringify({entity: ent().name, month: monthKey(M.perMI), saved: new Date().toISOString(), files: state.srcInv.name,
+    invoices: M.invs.map(i => ({vendor:i.vendor, number:i.number, date: i.date ? iso(i.date) : '', amount:i.amount, gst:i.tax, base:i.base,
+      section:i.section, rate:i.rate, tds:i.tds, interest:i.interest, note:i.belowNote || ''})),
+    challan: M.challan.map(c => ({section:c.key, code: state.codes[c.key] || '', tds:c.tdsR, interest:c.interest, total:c.total}))}, null, 2);
+}
+function renderVault(){
+  const el = $('#vault');
+  if (!vault.ok) { el.innerHTML = '<div class="what"><b>Not available here</b><div class="dim">Saving copies needs Edge or Chrome with the page opened directly (the GitHub Pages link or the local file), not inside claude.ai.</div></div>'; return; }
+  const wait = vault.pending.reduce((a, j) => a + j.files.length, 0);
+  const text = !vault.handle ? 'Pick a folder once. Every upload, including PDF invoices, is copied there by entity and month, with a summary of the review.'
+    : vault.perm === 'granted' ? 'Copies go to ' + vault.handle.name + '\\<entity>\\<month>.'
+    : 'The browser needs permission again for ' + vault.handle.name + ' this session.';
+  el.innerHTML = '<div class="what"><b>' + esc(vault.handle ? vault.handle.name : 'No folder chosen') + '</b><div class="dim">' + esc(text) + (wait ? ' ' + wait + ' file' + (wait > 1 ? 's' : '') + ' waiting.' : '') + '</div></div>' +
+    (vault.handle ? chip(vault.perm === 'granted' ? 'ok' : 'warn', vault.perm === 'granted' ? 'Saving' : 'Paused') : chip('warn', 'Off')) +
+    '<div class="acts">' + (vault.handle && vault.perm !== 'granted' ? '<button class="btn small" type="button" data-act="vault-allow">Allow</button>' : '') +
+    '<button class="btn small" type="button" data-act="vault-pick">' + (vault.handle ? 'Change' : 'Choose folder') + '</button></div>';
 }
 
 /* ---------- WHT payable GL ---------- */
@@ -2180,14 +2266,14 @@ $('#invoices').addEventListener('change', e => {
 });
 $('#master').addEventListener('change', e => {
   const i = e.target.dataset.i, f = e.target.dataset.f; if (i === undefined) return;
-  state.rules[+i][f] = e.target.type === 'checkbox' ? e.target.checked : e.target.value.trim(); store('rules8', state.rules); render();
+  state.rules[+i][f] = e.target.type === 'checkbox' ? e.target.checked : e.target.value.trim(); store('rules9', state.rules); render();
 });
 $('#master').addEventListener('click', e => {
   const d = e.target.dataset.del; if (d === undefined) return;
-  state.rules.splice(+d, 1); store('rules8', state.rules); render();
+  state.rules.splice(+d, 1); store('rules9', state.rules); render();
 });
-$('#addRule').addEventListener('click', () => { state.rules.push({...BLANK_RULE}); store('rules8', state.rules); renderRules(); });
-$('#resetRules').addEventListener('click', () => { state.rules = ent().rules.map(r => ({...BLANK_RULE, ...r})); state.overrides = {}; store('rules8', state.rules); store('overrides', {}); render(); toast('Default rules restored'); });
+$('#addRule').addEventListener('click', () => { state.rules.push({...BLANK_RULE}); store('rules9', state.rules); renderRules(); });
+$('#resetRules').addEventListener('click', () => { state.rules = ent().rules.map(r => ({...BLANK_RULE, ...r})); state.overrides = {}; store('rules9', state.rules); store('overrides', {}); render(); toast('Default rules restored'); });
 $('#codes').addEventListener('change', e => { const k = e.target.dataset.code; if (!k) return; state.codes[k] = e.target.value.trim(); store('codes2', state.codes); render(); });
 $('#saveMonth').addEventListener('click', () => {
   const month = Math.floor(M.perMI / 12) + '-' + String(M.perMI % 12 + 1).padStart(2,'0');
@@ -2202,6 +2288,10 @@ $('#glFile').addEventListener('change', e => { if (e.target.files.length) readFi
 $('#files').addEventListener('click', e => {
   if (!e.target.closest('[data-act="gl-reset"]')) return;
   store('gl', null); loadGL(); render(); toast(ent().gl.sample ? 'Upload removed; sample GL restored' : 'Upload removed');
+});
+$('#vault').addEventListener('click', e => {
+  const b = e.target.closest('[data-act]'); if (!b) return;
+  if (b.dataset.act === 'vault-pick') vaultPick(); else if (b.dataset.act === 'vault-allow') vaultAllow();
 });
 $('#tabs').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (b) showTab(b.dataset.tab, true); });
 $('#tabs').addEventListener('keydown', e => {
@@ -2242,5 +2332,6 @@ state.tab = (() => { const h = location.hash.slice(1); if (TABS.includes(h)) ret
 loadEntity(recall('entity', 'tech'));
 render();
 startAsk();
+vaultInit();
 })();
 </script>
