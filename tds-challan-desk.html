@@ -1225,7 +1225,8 @@ function computeGL(){
   const m0 = g.asOf ? mi(g.asOf) : Math.min(...rows.map(r => mi(r.date)));
   const last = Math.max(...rows.map(r => mi(r.date)));
   const book = rows.filter(r => r.jnl !== 'UFX');
-  const isChallan = r => r.dr > 0 && r.jnl !== 'APJ' && /tds|challan/i.test(r.doc + ' ' + r.memo);
+  // AP sometimes posts the bank narration ("CBDT/Bank Reference No...") as the memo, so CBDT also marks a challan
+  const isChallan = r => r.dr > 0 && r.jnl !== 'APJ' && /tds|challan|cbdt/i.test(r.doc + ' ' + r.memo);
   const per = new Map(); for (let m = m0; m <= last; m++) per.set(m, {booked:0, otherCr:0, paid:0, adj:0, move:0, usd:null, reval:false, rates:[]});
   rows.forEach(r => { const p = per.get(mi(r.date)); if (!p) return; p.usd = r.bal; if (r.jnl === 'UFX' && !/^reversed/i.test(r.memo)) p.reval = true; });
   book.forEach(r => {
@@ -1253,7 +1254,8 @@ function computeGL(){
     if (n > last) { e.pending = true; e.due = new Date(Math.floor(n / 12), n % 12, dueDay); return; }
     const inMonth = book.filter(r => mi(r.date) === n && r.dr > 0 && r.jnl !== 'APJ');
     const challans = inMonth.filter(isChallan); const onTime = challans.filter(r => r.date.getDate() <= dueDay);
-    const use = onTime.length ? onTime : challans.slice(0, 1);
+    // A late payment is often split into one challan per payment code on the same day (8 Oct 2026: 2,31,365 + 10,000), so take the whole first day
+    const use = onTime.length ? onTime : challans.filter(r => r.date.getTime() === challans[0].date.getTime());
     if (!use.length) { e.missing = true; e.cleared = 0; e.challan = 0; e.otherClear = 0; return; }
     const cutoff = Math.max(...use.map(r => r.date.getTime()));
     // For the opening, a journal posted alongside the March challan only counts if it belongs to the prior year and is not reversed later
