@@ -996,6 +996,15 @@ const state = {
 };
 
 function loadSample(){
+  // The last upload for this entity is kept in this browser, so the page reopens on it rather than the sample
+  const up = recall('upload', null);
+  if (up && up.invoices && up.invoices.length) {
+    state.invoices = up.invoices.map(i => ({...i, date: toDate(i.date), booked: toDate(i.booked)}));
+    state.bank = (up.bank || []).map(b => ({...b, date: toDate(b.date)}));
+    state.srcInv = up.srcInv; state.srcBank = up.srcBank;
+    state.settings.period = null; state.settings.payDate = iso(new Date());
+    return;
+  }
   if (!ent().sample) {
     state.invoices = []; state.bank = [];
     state.srcInv = {status:'missing', detail:'Upload the Concur extract to work out the challan'};
@@ -1095,6 +1104,8 @@ async function readSheets(files){
   state.invoices = inv; state.bank = bank;
   state.srcInv = {status:'loaded', name: names.join(', '), detail: inv.length + ' invoices'};
   state.srcBank = bank.length ? {status:'loaded', name: names.join(', '), detail: bank.length + ' lines'} : {status:'missing', detail:'No bank sheet in the file, so the bank check is skipped'};
+  store('upload', {invoices: inv.map(i => ({...i, date: i.date ? iso(i.date) : null, booked: i.booked ? iso(i.booked) : null})),
+    bank: bank.map(b => ({...b, date: b.date ? iso(b.date) : null})), srcInv: state.srcInv, srcBank: state.srcBank});
   state.settings.period = null; state.settings.payDate = iso(new Date()); state.view = 'cur';
   render();
   toast('File loaded');
@@ -1923,7 +1934,7 @@ function renderFiles(){
     : {status: g.uploaded ? 'loaded' : 'sample', name: g.uploaded ? g.file : 'Intacct GL report, April to September 2026', detail: g.rows.length + ' lines' + (g.uploaded ? ', kept in this browser' : '')};
   const up = id => '<label for="' + id + '" class="btn small">Upload</label>';
   const rows = [
-    ['Concur invoice extract', state.srcInv, up('file')],
+    ['Concur invoice extract', state.srcInv, up('file') + (state.srcInv.status === 'loaded' ? '<button class="btn small" type="button" data-act="inv-reset">Remove</button>' : '')],
     ['Bank statement', state.srcBank, up('file')],
     ['WHT payable GL · account 250500 · office ' + cfg.office, glSrc, up('glFile') + (g && g.uploaded ? '<button class="btn small" type="button" data-act="gl-reset">Remove</button>' : '')]
   ];
@@ -2335,6 +2346,7 @@ $('#saveMonth').addEventListener('click', () => {
 
 $('#glFile').addEventListener('change', e => { if (e.target.files.length) readFiles([...e.target.files]); e.target.value = ''; });
 $('#files').addEventListener('click', e => {
+  if (e.target.closest('[data-act="inv-reset"]')) { store('upload', null); loadSample(); render(); toast(ent().sample ? 'Upload removed; sample restored' : 'Upload removed'); return; }
   if (!e.target.closest('[data-act="gl-reset"]')) return;
   store('gl', null); loadGL(); render(); toast(ent().gl.sample ? 'Upload removed; sample GL restored' : 'Upload removed');
 });
