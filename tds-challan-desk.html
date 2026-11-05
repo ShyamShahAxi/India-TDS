@@ -127,6 +127,8 @@ td.desc{max-width:280px;min-width:180px;color:var(--muted)}
 tr.grp td{background:var(--sunk);font-weight:600;font-family:var(--f-display);font-size:.9rem}
 td select{max-width:190px}
 td input.base-in{width:8.5em;text-align:right;font-variant-numeric:tabular-nums}
+label.waive{display:block;font-size:.72rem;color:var(--muted);white-space:nowrap;cursor:pointer}
+label.waive input{margin:0 3px 0 0;vertical-align:-2px}
 .code{font-family:var(--f-mono);font-size:.8rem;background:var(--sunk);border:1px solid var(--line);border-radius:4px;padding:1px 6px}
 .code-btn{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:10px;border-radius:4px}
 .code-btn .caret{display:inline-block;width:0;height:0;border-left:5px solid var(--muted);border-top:4px solid transparent;border-bottom:4px solid transparent;transition:transform .15s}
@@ -1434,6 +1436,9 @@ function matchPayments(list, rows){
   });
   return {paid, unpaid: open, used};
 }
+// Interest runs from the invoice month, but a bill dated on the last day of a month counts as the next month's
+// (agreed with the tax advisor, Nov 2026). Exceptions such as proformas are waived per invoice.
+const interestMI = d => mi(new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1));
 function compute(){
   const S = state.settings;
   const invs = state.invoices.map(inv => {
@@ -1453,7 +1458,7 @@ function compute(){
       if (sec.rule === 'single' && base <= sec.single) { below = true; belowNote = 'Under ₹30,000 per bill. Check the FY total stays under ₹1,00,000'; }
       if (sec.rule === 'annual' && base <= sec.annual) { below = true; belowNote = 'Under ₹' + fmt(sec.annual,0) + ' for the year. Check the FY total'; }
     }
-    return {...inv, ...c, sec, base, baseSet, stat, rate, hasLdc, preCert, postCert, cert: c.rule ? String(c.rule.cert || '').trim() : '', below, belowNote,
+    return {...inv, ...c, sec, base, baseSet, noInt: !!(ov && ov.noInt), waived: 0, stat, rate, hasLdc, preCert, postCert, cert: c.rule ? String(c.rule.cert || '').trim() : '', below, belowNote,
       ldcPart: hasLdc ? base : 0, overLimit: 0, full: 0, tds: 0, voluntary: false, interest: 0, months: 0};
   });
 
@@ -1516,11 +1521,10 @@ function compute(){
   });
 
   invs.forEach(i => {
-    // TDS falls due when the bill is booked; the Concur create date stands in for that, else the invoice date
-    const when = i.booked || i.date;
-    if (i.tds > 0 && when) {
-      const imi = mi(when);
+    if (i.tds > 0 && i.date) {
+      const imi = interestMI(i.date);
       if (imi < perMI || late) { i.months = Math.max(1, payMI - imi + 1); i.interest = Math.round(Math.round(i.tds) * S.rate / 100 * i.months); }
+      if (i.noInt && i.interest) { i.waived = i.interest; i.interest = 0; i.months = 0; }
     }
   });
 
@@ -1816,11 +1820,13 @@ function renderInvoices(){
       if (i.overridden) notes.push(chip('info', 'Section set manually'));
       if (i.baseSet) notes.push(chip('info', 'TDS base set manually'));
       if (i.unpaid) notes.push(chip('info', 'Not paid yet; TDS still due'));
+      if (i.waived) notes.push(chip('info', 'Interest of ' + rs(i.waived, 0) + ' waived'));
       if (!i.sec) notes.push(chip('bad', 'No section'));
       h += '<tr><td>' + esc(i.number) + '</td><td class="num">' + fdate(i.date) + '</td><td class="desc">' + esc(i.desc) + '</td><td class="n"><input class="base-in" type="number" step="0.01" min="0" value="' + i.base + '" data-bkey="' + esc(i.key) +
         '" title="TDS base. Change it when part of the bill is goods" aria-label="TDS base for ' + esc(i.number) + '"></td><td class="n">' + fmt(i.tax) +
         '</td><td><select id="sec-' + esc(i.key) + '" data-key="' + esc(i.key) + '" aria-label="TDS section for ' + esc(i.number) + '">' + opts(i.section) + '</select></td><td class="n">' + (i.sec ? (i.overLimit > 0 ? 'mixed' : i.rate + '%') : '—') +
-        '</td><td class="n">' + fmt(i.tds) + '</td><td class="n">' + (i.interest ? fmt(i.interest,0) : '—') + '</td><td><div class="chips">' + notes.join('') + '</div></td></tr>';
+        '</td><td class="n">' + fmt(i.tds) + '</td><td class="n">' + (i.interest ? fmt(i.interest,0) : '—') +
+        (i.interest || i.noInt ? '<label class="waive"><input type="checkbox" data-ikey="' + esc(i.key) + '"' + (i.noInt ? ' checked' : '') + '> waive</label>' : '') + '</td><td><div class="chips">' + notes.join('') + '</div></td></tr>';
     });
   });
   $('#invoices').innerHTML = h + '</tbody></table>';
@@ -2314,9 +2320,10 @@ $('#rate').addEventListener('change', e => { state.settings.rate = +e.target.val
 $('#thr').addEventListener('change', e => { state.settings.thresholds = e.target.checked; render(); });
 
 $('#invoices').addEventListener('change', e => {
-  const bk = e.target.dataset.bkey, k = e.target.dataset.key || bk; if (!k) return;
+  const bk = e.target.dataset.bkey, ik = e.target.dataset.ikey, k = e.target.dataset.key || bk || ik; if (!k) return;
   const o = {...(state.overrides[k] || {})};
-  if (bk) {
+  if (ik) { if (e.target.checked) o.noInt = true; else delete o.noInt; }
+  else if (bk) {
     // An empty box or the full amount before GST puts the base back to normal
     const inv = state.invoices.find(x => x.key === k); const v = e.target.value === '' ? null : toNum(e.target.value);
     if (v === null || (inv && near(v, r2(inv.amount - inv.tax), 0.005))) delete o.base; else o.base = v;
