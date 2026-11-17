@@ -324,6 +324,11 @@ details.card > .inner{padding:0 18px 18px;display:flex;flex-direction:column;gap
       <p class="hint">Each month-end balance, less what the next challan cleared, should leave only the known items below. Anything else is unexplained.</p>
       <div class="card scroll" id="glTable"></div>
     </div>
+    <div class="block" id="glTieBlock">
+      <div class="block-head"><h2 id="glTieTitle">Completeness check</h2></div>
+      <p class="hint">Every invoice with TDS this month should have a WHT credit in 250500, and every credit should have an invoice. AP journals carry no invoice number, so credits are matched on amount. A mismatch means the bill was not booked, was booked in another month, was booked at the wrong rate, or is missing from the Concur extract. A vendor missing from both Concur and the GL (as AWS was) cannot show here.</p>
+      <div class="card scroll" id="glTie"></div>
+    </div>
     <div class="block" id="glItemsBlock">
       <div class="block-head"><h2>Items to reconcile</h2></div>
       <div class="card"><ul class="issues" id="glItems"></ul>
@@ -402,6 +407,10 @@ details.card > .inner{padding:0 18px 18px;display:flex;flex-direction:column;gap
       <div class="block-head"><h2>Copies of uploads</h2></div>
       <div class="card"><ul class="files"><li id="vault"></li></ul></div>
     </div>
+    <div class="block">
+      <div class="block-head"><h2>Version</h2><span class="dim" id="version"></span></div>
+      <div class="card"><ul class="issues" id="changes"></ul></div>
+    </div>
     <div class="folds">
       <details class="card" id="pBank">
         <summary>Other bank debits <span class="dim" id="bankCount"></span></summary>
@@ -447,6 +456,16 @@ details.card > .inner{padding:0 18px 18px;display:flex;flex-direction:column;gap
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
 (function(){
+// Bump the version and add a line for every change to the rules or the calculation. The version is stamped on each saved review,
+// so a month's figures can be traced to the logic that produced them. tests/regression.js must pass before a release.
+const VERSION = '2026.11.17';
+const CHANGES = [
+  ['2026.11.17', 'Completeness check: TDS due matched to WHT credits in 250500. Version stamped on saved reviews, with the rules and overrides used.'],
+  ['2026.11.05', 'Interest from the invoice month; a bill dated on the last day of a month counts as the next month. Interest can be waived per invoice.'],
+  ['2026.11.04', 'Last Concur upload kept per entity in the browser.'],
+  ['2026.11.03', 'Payments matched to invoices; TDS base editable per invoice; SWAI certificate ends 30 Sep 2026; whole-word rule keywords; Kalakarah and Marudhar rules.'],
+  ['2026.11.02', 'Copies of uploads to a folder; Holiday Inn, Brigade and insurance premiums at no TDS; GL rec counts all same-day late challans and CBDT memos.']
+];
 const SECTIONS = {
   '194C':      {name:'Contractors – company / firm', rate:2,  rule:'single',  single:30000, annual:100000},
   '194C-ind':  {name:'Contractors – individual / HUF', rate:1, rule:'single', single:30000, annual:100000},
@@ -1165,7 +1184,9 @@ async function vaultFlush(){
   renderVault();
 }
 function reviewJson(){
-  return JSON.stringify({entity: ent().name, month: monthKey(M.perMI), saved: new Date().toISOString(), files: state.srcInv.name,
+  return JSON.stringify({version: VERSION, entity: ent().name, month: monthKey(M.perMI), saved: new Date().toISOString(), files: state.srcInv.name,
+    totals: {tds: M.totTds, interest: M.totInt}, rules: state.rules, overrides: state.overrides,
+    completeness: M.tie && !M.tie.short ? {tdsDue: M.tie.due, whtBooked: M.tie.booked, difference: M.tie.diff} : null,
     invoices: M.invs.map(i => ({vendor:i.vendor, number:i.number, date: i.date ? iso(i.date) : '', amount:i.amount, gst:i.tax, base:i.base,
       section:i.section, rate:i.rate, tds:i.tds, interest:i.interest, note:i.belowNote || ''})),
     challan: M.challan.map(c => ({section:c.key, code: state.codes[c.key] || '', tds:c.tdsR, interest:c.interest, total:c.total}))}, null, 2);
@@ -1302,9 +1323,50 @@ function computeGL(){
 
 const fyOf = m => 'FY ' + (Math.floor(m / 12) - 1) + '-' + String(Math.floor(m / 12) % 100).padStart(2,'0');
 const keyMonth = k => +k.slice(0,4) * 12 + (+k.slice(5) - 1);
+// Completeness: match this month's WHT credits in 250500 (AP journals) to the invoices with TDS due.
+// First on the TDS due, then on the invoice at another common rate (booked at the wrong rate). What is left on either side is flagged.
+function tieOut(){
+  const g = state.gl; if (!g || !g.rows.length) return null;
+  const last = Math.max(...g.rows.map(r => mi(r.date)));
+  if (last < M.perMI) return {month: M.perMI, last, short: true};
+  const open = g.rows.filter(r => r.jnl === 'APJ' && r.cr > 0 && mi(r.date) === M.perMI);
+  const take = pred => { const k = open.findIndex(pred); return k < 0 ? null : open.splice(k, 1)[0]; };
+  const invs = M.invs.filter(i => i.tds > 0), lines = [], left = [];
+  invs.forEach(i => { const r = take(r => Math.abs(r.amt - i.tds) <= 1); if (r) lines.push({kind:'ok', i, r}); else left.push(i); });
+  left.forEach(i => {
+    let rate = null;
+    const r = take(r => [0.1, 1, 2, 5, 10].some(p => { const hit = Math.abs(r.amt - i.base * p / 100) <= 1; if (hit) rate = p; return hit; }));
+    lines.push(r ? {kind:'rate', i, r, rate} : {kind:'missing', i});
+  });
+  open.forEach(r => lines.push({kind:'extra', r}));
+  const due = r2(sum(invs, 'tds')), booked = r2(sum(g.rows.filter(r => r.jnl === 'APJ' && r.cr > 0 && mi(r.date) === M.perMI), 'amt'));
+  return {month: M.perMI, due, booked, diff: r2(due - booked), lines};
+}
+function renderTie(){
+  const t = tieOut(); M.tie = t;
+  $('#glTieBlock').hidden = !t;
+  if (!t) return;
+  $('#glTieTitle').textContent = 'Completeness check · ' + monthLabel(t.month);
+  if (t.short) { $('#glTie').innerHTML = '<p class="empty">The GL report ends in ' + esc(monthLabel(t.last)) + '. Upload a 250500 GL that covers ' + esc(monthLabel(t.month)) + ' to run the check.</p>'; return; }
+  const ok = t.lines.filter(l => l.kind === 'ok'), bad = t.lines.filter(l => l.kind !== 'ok');
+  const note = l => l.kind === 'rate' ? 'Booked at ' + l.rate + '%, due at ' + l.i.rate + '%'
+    : l.kind === 'missing' ? 'No WHT credit in 250500 this month: not booked yet, booked in another month, or AP did not withhold'
+    : 'WHT credit with no invoice in the Concur extract. Check for an invoice missing from the extract';
+  let h = '<p style="margin:0 0 10px">' + esc(ok.length + ' of ' + (ok.length + bad.filter(l => l.i).length) + ' invoices match a WHT credit. ') +
+    'TDS due <b>' + esc(rs(t.due)) + '</b>, WHT booked in 250500 <b>' + esc(rs(t.booked)) + '</b>, difference <b>' + esc(rs(t.diff)) + '</b>.</p>';
+  if (bad.length) {
+    h += '<table><thead><tr><th>Vendor</th><th>Invoice</th><th class="n">TDS due</th><th class="n">Booked</th><th class="n">Difference</th><th>Note</th></tr></thead><tbody>';
+    bad.forEach(l => { const d = l.i ? l.i.tds : 0, b = l.r ? l.r.amt : 0;
+      h += '<tr class="sev-' + (l.kind === 'rate' || l.kind === 'missing' ? 'bad' : 'warn') + '"><td>' + esc(l.i ? l.i.vendor : '—') + '</td><td>' + esc(l.i ? l.i.number : fdate(l.r.date)) + '</td><td class="n">' + (l.i ? fmt(d) : '—') +
+        '</td><td class="n">' + (l.r ? fmt(b) : '—') + '</td><td class="n">' + fmt(r2(d - b)) + '</td><td>' + esc(note(l)) + '</td></tr>'; });
+    h += '</tbody></table>';
+  } else h += '<p class="empty">Every invoice with TDS has a matching WHT credit, and every credit has an invoice.</p>';
+  $('#glTie').innerHTML = h;
+}
 function renderGL(){
   const cfg = ent().gl, G = computeGL(), g = state.gl;
   M.gl = G;
+  renderTie();
   ['#glSum', '#glTableBlock', '#glItemsBlock'].forEach(s => { $(s).hidden = !G; });
   $('#glEmpty').hidden = !!G;
   if (!G) {
@@ -2401,5 +2463,7 @@ loadEntity(recall('entity', 'tech'));
 render();
 startAsk();
 vaultInit();
+$('#version').textContent = 'v' + VERSION;
+$('#changes').innerHTML = CHANGES.map(([v, t]) => '<li class="info"><span class="mark"></span><span><b>' + esc(v) + '</b> · ' + esc(t) + '</span></li>').join('');
 })();
 </script>
