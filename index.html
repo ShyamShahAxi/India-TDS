@@ -466,8 +466,9 @@ details.card > .inner{padding:0 18px 18px;display:flex;flex-direction:column;gap
 (function(){
 // Bump the version and add a line for every change to the rules or the calculation. The version is stamped on each saved review,
 // so a month's figures can be traced to the logic that produced them. tests/regression.js must pass before a release.
-const VERSION = '2026.11.17';
+const VERSION = '2026.11.17.2';
 const CHANGES = [
+  ['2026.11.17.2', 'The built-in September 2026 month stays in the year after a later month is uploaded. The challan payment date is remembered with the upload.'],
   ['2026.11.17', 'Completeness check: TDS due matched to WHT credits in 250500. Version stamped on saved reviews, with the rules and overrides used.'],
   ['2026.11.05', 'Interest from the invoice month; a bill dated on the last day of a month counts as the next month. Interest can be waived per invoice.'],
   ['2026.11.04', 'Last Concur upload kept per entity in the browser.'],
@@ -1031,7 +1032,7 @@ function loadSample(){
     state.invoices = up.invoices.map(i => ({...i, date: toDate(i.date), booked: toDate(i.booked)}));
     state.bank = (up.bank || []).map(b => ({...b, date: toDate(b.date)}));
     state.srcInv = up.srcInv; state.srcBank = up.srcBank;
-    state.settings.period = null; state.settings.payDate = iso(new Date());
+    state.settings.period = null; state.settings.payDate = up.payDate || iso(new Date());
     return;
   }
   if (!ent().sample) {
@@ -1048,6 +1049,22 @@ function loadSample(){
   state.settings.period = null; state.settings.payDate = '2026-10-07';
 }
 
+// The built-in month (September 2026) is not in the advisor's history sheets. When an upload replaces it, work it out
+// from the built-in data and add it to the year, unless that month was saved separately.
+function addSampleMonth(){
+  if (!ent().sample || state.srcInv.status !== 'loaded') return;
+  const keep = {invoices: state.invoices, bank: state.bank, period: state.settings.period, payDate: state.settings.payDate};
+  state.invoices = ent().inv.map(r => ({vendor:r[0], number:r[1], date:toDate(r[2]), amount:r[3], tax:r[4], desc:r[5], key:norm(r[0]) + '|' + r[1]}));
+  state.bank = ent().bankRows.map(r => ({date:toDate(r[0]), narration:r[1], debit:r[2], credit:r[3], notes:r[4]}));
+  state.settings.period = null; state.settings.payDate = '2026-10-07';
+  try {
+    const S = compute(), month = monthKey(S.perMI);
+    if (!state.history.some(h => h.month === month)) {
+      state.history = state.history.concat(S.invs.filter(i => i.tds > 0).map(i => normHist({month, vendor:i.vendor, number:i.number, date: i.date ? iso(i.date) : '',
+        base:i.base, gst:i.tax, tds: r2(i.tds), interest:i.interest, code: state.codes[i.section] || '', desc:i.desc, source:'Built-in month'})));
+    }
+  } finally { state.invoices = keep.invoices; state.bank = keep.bank; state.settings.period = keep.period; state.settings.payDate = keep.payDate; }
+}
 function loadEntity(key){
   currentEntity = ENTITIES[key] ? key : 'tech';
   store('entity', currentEntity);
@@ -1055,7 +1072,7 @@ function loadEntity(key){
   state.codes = Object.assign({}, DEFAULT_CODES, recall('codes2', {}));
   state.overrides = recall('overrides', {});
   state.view = 'cur'; state.open = new Set();
-  loadHistory(); loadSample(); loadGL();
+  loadHistory(); loadSample(); loadGL(); addSampleMonth();
   document.querySelectorAll('#entitySeg button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.entity === currentEntity)));
   $('#entityLine').textContent = ent().line;
 }
@@ -1135,6 +1152,7 @@ async function readSheets(files){
   state.srcBank = bank.length ? {status:'loaded', name: names.join(', '), detail: bank.length + ' lines'} : {status:'missing', detail:'No bank sheet in the file, so the bank check is skipped'};
   store('upload', {invoices: inv.map(i => ({...i, date: i.date ? iso(i.date) : null, booked: i.booked ? iso(i.booked) : null})),
     bank: bank.map(b => ({...b, date: b.date ? iso(b.date) : null})), srcInv: state.srcInv, srcBank: state.srcBank});
+  loadHistory(); addSampleMonth();
   state.settings.period = null; state.settings.payDate = iso(new Date()); state.view = 'cur';
   render();
   toast('File loaded');
@@ -2385,7 +2403,12 @@ $('#codesTable').addEventListener('click', e => {
   const row = document.getElementById(b.getAttribute('aria-controls')); if (row) row.hidden = !open;
 });
 $('#period').addEventListener('change', e => { state.settings.period = e.target.value || null; state.view = 'cur'; render(); });
-$('#payDate').addEventListener('change', e => { state.settings.payDate = e.target.value || null; render(); });
+$('#payDate').addEventListener('change', e => {
+  state.settings.payDate = e.target.value || null;
+  // Remember the challan date with the upload, so reopening the month does not treat it as paid today
+  const up = recall('upload', null); if (up && state.srcInv.status === 'loaded') store('upload', {...up, payDate: state.settings.payDate});
+  render();
+});
 $('#rate').addEventListener('change', e => { state.settings.rate = +e.target.value; render(); });
 $('#thr').addEventListener('change', e => { state.settings.thresholds = e.target.checked; render(); });
 
@@ -2423,7 +2446,7 @@ $('#saveMonth').addEventListener('click', () => {
 
 $('#glFile').addEventListener('change', e => { if (e.target.files.length) readFiles([...e.target.files]); e.target.value = ''; });
 $('#files').addEventListener('click', e => {
-  if (e.target.closest('[data-act="inv-reset"]')) { store('upload', null); loadSample(); render(); toast(ent().sample ? 'Upload removed; sample restored' : 'Upload removed'); return; }
+  if (e.target.closest('[data-act="inv-reset"]')) { store('upload', null); loadHistory(); loadSample(); render(); toast(ent().sample ? 'Upload removed; sample restored' : 'Upload removed'); return; }
   if (!e.target.closest('[data-act="gl-reset"]')) return;
   store('gl', null); loadGL(); render(); toast(ent().gl.sample ? 'Upload removed; sample GL restored' : 'Upload removed');
 });

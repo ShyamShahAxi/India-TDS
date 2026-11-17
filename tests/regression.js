@@ -17,7 +17,14 @@ expect('SWAI over certificate limit, Sep 2026', sum(M.invs.filter(i => /swai/i.t
 expect('AXI Tech Sep 2026 Indiqube rent at 1%', sum(M.invs.filter(i => i.section === '194-I(b)'), 'tds'), 41392);
 loadEntity('digital'); state.overrides = {}; render();
 expect('AXI Digital Sep 2026 TDS', M.totTds, __DIGITAL__);
+// After a later month is uploaded, September must stay in the year with its full TDS
 loadEntity('tech');
+store('upload', {invoices: [{vendor:'Treta Advisors', number:'T-1', date:'2026-10-01', amount:118000, tax:18000, desc:'Business support', key:'treta advisors|T-1'}], bank: [], srcInv: {status:'loaded', name:'test', detail:'1 invoice'}, srcBank: {status:'missing'}, payDate: '2026-11-06'});
+loadEntity('tech'); render();
+expect('Uploaded month', M.perMI, 2026 * 12 + 9, 0);
+expect('September kept in the year after upload', r2(sum(state.history.filter(h => h.month === '2026-09'), 'tds')), 371137.45);
+expect('Payment date remembered (no interest when paid by 7 Nov)', M.totInt, 0, 0);
+store('upload', null); loadEntity('tech');
 globalThis.__RES = res;
 `;
 const digital = '153311'; // ₹1,44,130 + SWAI 1% top-up ₹9,181 (AXI Digital has no certificate)
