@@ -159,7 +159,7 @@ tr.muted-row td{color:var(--muted)}
 .issues{list-style:none;margin:0;padding:0}
 .issues li{display:grid;grid-template-columns:4px minmax(0,1fr);gap:14px;padding:12px 16px;border-bottom:1px solid var(--line)}
 .issues li:last-child{border-bottom:none}
-.issues .mark{border-radius:2px}
+.issues .mark{width:4px;height:auto;min-height:100%;border-radius:2px;display:block}
 .issues .bad .mark{background:var(--bad)} .issues .warn .mark{background:var(--warn)} .issues .info .mark{background:var(--muted)} .issues .ok .mark{background:var(--ok)}
 
 /* Files list */
@@ -369,7 +369,12 @@ details.card > .inner{padding:0 18px 18px;display:flex;flex-direction:column;gap
       <div class="controls"><button class="btn small" id="saveMonth" type="button">Save this month to the year</button></div>
     </div>
     <div class="card"><ul class="issues" id="prior"></ul></div>
-    <p class="hint">Saving keeps the uploaded month in this browser, so next month's certificate usage and these checks include it.</p>
+    <p class="hint">Saving keeps the uploaded month in this browser, so next month's certificate usage and these checks include it. Saving a month again replaces it.</p>
+    <div class="block" id="savedBlock" hidden>
+      <div class="block-head"><h2>Months saved in this browser</h2></div>
+      <p class="hint">A saved month replaces the advisor's summary or the built-in figures for that month. Remove one that is out of date, then upload the final workings for that month and save it again.</p>
+      <div class="card"><ul class="files" id="savedMonths"></ul></div>
+    </div>
   </section>
 
   <!-- Assistant -->
@@ -466,8 +471,12 @@ details.card > .inner{padding:0 18px 18px;display:flex;flex-direction:column;gap
 (function(){
 // Bump the version and add a line for every change to the rules or the calculation. The version is stamped on each saved review,
 // so a month's figures can be traced to the logic that produced them. tests/regression.js must pass before a release.
-const VERSION = '2026.11.17.2';
+const VERSION = '2026.11.18.4';
 const CHANGES = [
+  ['2026.11.18.4', 'A top-up challan later in the same month counts as clearing the previous month. An invoice on which a certificate limit ran out (part at the lower rate) counts against the limit and is not flagged as uncovered. The rent-limit note applies only to bills the vendor rules treat as rent. Saved months are listed under Earlier months and can be removed.'],
+  ['2026.11.18.3', 'Invoice detail and its Excel copy follow the month picked under Challan: earlier months show the advisor\'s invoice lines (read-only), and the year to date shows every month.'],
+  ['2026.11.18.2', 'GL reconciliation marks a challan "Paid late" only when the bank file shows the CBDT payment after the due date (date read from the CIN). A challan posted after the due date with no bank evidence shows as "Posted", not late.'],
+  ['2026.11.18', 'GL reconciliation works for a 250500 report that starts mid-year: journals with the first challan count, known items already open are not counted twice, and an entered INR opening applies only to its own month-end. A challan journal reversed and re-posted on the day nets to nil.'],
   ['2026.11.17.2', 'The built-in September 2026 month stays in the year after a later month is uploaded. The challan payment date is remembered with the upload.'],
   ['2026.11.17', 'Completeness check: TDS due matched to WHT credits in 250500. Version stamped on saved reviews, with the rules and overrides used.'],
   ['2026.11.05', 'Interest from the invoice month; a bill dated on the last day of a month counts as the next month. Interest can be waived per invoice.'],
@@ -1021,7 +1030,7 @@ const ENTITIES = {
 const ent = () => ENTITIES[currentEntity];
 
 const state = {
-  invoices: [], bank: [], srcInv: {}, srcBank: {}, rules: [], codes: {}, history: [], overrides: {}, gl: null, glOpen: null,
+  invoices: [], bank: [], srcInv: {}, srcBank: {}, rules: [], codes: {}, history: [], overrides: {}, gl: null, glOpen: null, glOpenKey: null,
   settings: {period: null, payDate: null, rate: 1.5, thresholds: true}
 };
 
@@ -1280,7 +1289,10 @@ function loadGL(){
   else if (cfg.sample) state.gl = {file:cfg.sample.file, openUsd:cfg.sample.openUsd, asOf:new Date(2026, 3, 1), uploaded:false,
     rows: cfg.sample.rows.map(a => ({date:toDate(a[0]), doc:a[1], memo:a[2], jnl:a[3], cur:a[4], amt:a[5], dr:a[6], cr:a[7], bal:a[8]}))};
   else state.gl = null;
-  const o = recall('glOpen', null); state.glOpen = typeof o === 'number' ? o : null;
+  // Saved as {v, key}: the INR balance and the month-end it is for. Older saves were a bare number for 31 March 2026.
+  const o = recall('glOpen', null);
+  state.glOpen = typeof o === 'number' ? o : o && typeof o.v === 'number' ? o.v : null;
+  state.glOpenKey = typeof o === 'number' ? '2026-03' : o && o.key || null;
 }
 const median = a => { if (!a.length) return null; const s = [...a].sort((x, y) => x - y), k = s.length >> 1; return s.length % 2 ? s[k] : (s[k-1] + s[k]) / 2; };
 function computeGL(){
@@ -1291,6 +1303,10 @@ function computeGL(){
   const book = rows.filter(r => r.jnl !== 'UFX');
   // AP sometimes posts the bank narration ("CBDT/Bank Reference No...") as the memo, so CBDT also marks a challan
   const isChallan = r => r.dr > 0 && r.jnl !== 'APJ' && /tds|challan|cbdt/i.test(r.doc + ' ' + r.memo);
+  // Tax payments in the loaded bank file, dated from the CIN (yymmdd after "CIN No:") where the narration has one
+  const cinDate = s => { const m = String(s).match(/CIN\s*NO\s*:?\s*(\d{2})(\d{2})(\d{2})/i); if (!m) return null;
+    const d = new Date(2000 + +m[1], +m[2] - 1, +m[3]); return isNaN(d) || d.getMonth() !== +m[2] - 1 ? null : d; };
+  const cbdt = (state.bank || []).filter(b => b.debit > 0 && /cbdt/i.test(b.narration || '')).map(b => ({...b, date: cinDate(b.narration) || b.date})).filter(b => b.date);
   const per = new Map(); for (let m = m0; m <= last; m++) per.set(m, {booked:0, otherCr:0, paid:0, adj:0, move:0, usd:null, reval:false, rates:[]});
   rows.forEach(r => { const p = per.get(mi(r.date)); if (!p) return; p.usd = r.bal; if (r.jnl === 'UFX' && !/^reversed/i.test(r.memo)) p.reval = true; });
   book.forEach(r => {
@@ -1308,8 +1324,10 @@ function computeGL(){
   // INR opening: entered, or estimated from the revalued USD balance at each month-end (USD balance x month's rate, less the INR movement so far)
   const ests = ends.filter(e => e.reval && e.rate && e.usd !== null).map(e => -e.usd * e.rate - e.cum);
   const estimate = ests.length ? r2(median(ests)) : null;
-  const open = state.glOpen !== null ? state.glOpen : estimate;
-  const basis = state.glOpen !== null ? 'entered' : estimate !== null ? 'estimated' : 'none';
+  // An entered INR opening belongs to one month-end; a report that starts in another month goes back to the estimate
+  const entered = state.glOpen !== null && state.glOpenKey === monthKey(m0 - 1) ? state.glOpen : null;
+  const open = entered !== null ? entered : estimate;
+  const basis = entered !== null ? 'entered' : estimate !== null ? 'estimated' : 'none';
   const rateUsed = median(ends.filter(e => e.reval && e.rate).map(e => e.rate));
   // What the next challan cleared for each month-end
   ends.forEach(e => {
@@ -1322,21 +1340,38 @@ function computeGL(){
     const use = onTime.length ? onTime : challans.filter(r => r.date.getTime() === challans[0].date.getTime());
     if (!use.length) { e.missing = true; e.cleared = 0; e.challan = 0; e.otherClear = 0; return; }
     const cutoff = Math.max(...use.map(r => r.date.getTime()));
-    // For the opening, a journal posted alongside the March challan only counts if it belongs to the prior year and is not reversed later
+    // For a 31 March opening, a journal posted alongside the March challan only counts if it belongs to the prior year and is not reversed later
     // (a later reversal means it was a reclass that comes back, not a settlement of the opening balance).
+    // A report that starts mid-year opens on an ordinary month-end, so its journals count like any other month's (7 Jul 2026 SWAI 2% to 1%).
+    const fyOpen = e.m === m0 - 1 && e.m % 12 === 2;
     const priorFy = (() => { const y = Math.floor(e.m / 12) - (e.m % 12 < 3 ? 1 : 0), s = String(y % 100).padStart(2,'0'), t = String((y + 1) % 100).padStart(2,'0');
       return new RegExp('(20)?' + s + '-' + t + '|' + s + t); })();
     const reversedLater = r => !!r.doc && book.some(x => x !== r && x.doc === r.doc && Math.abs(x.amt - r.amt) < 0.01 && x.cr > 0 && x.date > r.date);
-    const clear = inMonth.filter(r => r.date.getTime() <= cutoff && (e.m !== m0 - 1 || isChallan(r) || (priorFy.test(r.doc) && !reversedLater(r))));
-    e.challanRows = use; e.late = !onTime.length; e.challanDate = new Date(cutoff);
-    e.challan = r2(sum(use, 'amt')); e.cleared = r2(sum(clear, 'amt')); e.otherClear = r2(e.cleared - e.challan);
+    const clear = inMonth.filter(r => r.date.getTime() <= cutoff && (!fyOpen || isChallan(r) || (priorFy.test(r.doc) && !reversedLater(r))));
+    // A challan journal reversed and re-posted on the day (8 Oct 2026: wrong bank account, ₹9,319 out and back in) nets to nil
+    const backs = book.filter(r => mi(r.date) === n && r.cr > 0 && r.jnl !== 'APJ' && r.date.getTime() <= cutoff && /tds|challan|cbdt/i.test(r.doc + ' ' + r.memo));
+    // The GL posting date is not the payment date: AP may post a challan paid on the 7th a day later. A CBDT debit in the bank file
+    // (its CIN carries the deposit date) settles whether it was late; without one the row only says when it was posted.
+    const paid = cbdt.filter(b => mi(b.date) === n && b.date.getTime() <= cutoff);
+    e.paidOn = paid.length ? new Date(Math.max(...paid.map(b => b.date.getTime()))) : null;
+    e.challanRows = use; e.challanDate = new Date(cutoff);
+    e.late = e.paidOn ? e.paidOn.getDate() > dueDay : null; e.postedLate = !onTime.length;
+    e.challan = r2(sum(use, 'amt') - sum(backs, 'amt')); e.cleared = r2(sum(clear, 'amt') - sum(backs, 'amt')); e.otherClear = r2(e.cleared - e.challan);
+    // A top-up challan later in the same month settles what the first one missed (31 Oct 2026: ₹1,36,087 for September's shortfall)
+    const later = r => mi(r.date) === n && r.jnl !== 'APJ' && r.date.getTime() > cutoff && /tds|challan|cbdt/i.test(r.doc + ' ' + r.memo);
+    const tops = book.filter(r => later(r) && r.dr > 0 && isChallan(r)), topBacks = book.filter(r => later(r) && r.cr > 0);
+    e.topUp = r2(sum(tops, 'amt') - sum(topBacks, 'amt'));
+    e.topUpDate = tops.length ? new Date(Math.max(...tops.map(r => r.date.getTime()))) : null;
+    if (e.topUp) e.cleared = r2(e.cleared + e.topUp);
   });
   const first = ends[0];
-  const openDiff = first.pending || first.missing ? null : r2(first.inr - first.cleared);
+  // Known items already open at the opening (a report starting after April) sit inside the opening balance, so they come out of the opening difference
   const carried = key => cfg.items.filter(it => it.from <= key && (!it.to || key < it.to));
+  const openItems = r2(sum(carried(first.key), 'amount'));
+  const openDiff = first.pending || first.missing ? null : r2(first.inr - first.cleared - openItems);
   let prevUn = 0;
   ends.forEach((e, i) => {
-    e.items = i === 0 ? [] : carried(e.key);
+    e.items = carried(e.key);
     e.carried = r2(sum(e.items, 'amount'));
     if (e.pending || e.missing || openDiff === null) { e.expected = openDiff === null ? null : r2(e.inr - openDiff - e.carried - prevUn); return; }
     e.diff = r2(e.inr - e.cleared);
@@ -1344,7 +1379,7 @@ function computeGL(){
     e.newUn = r2(e.unexpl - prevUn); prevUn = e.unexpl;
   });
   const nonInr = book.filter(r => r.cur && r.cur !== 'INR');
-  return {ends, open, estimate, basis, rateUsed, openDiff, cfg, nonInr, m0, last, cleared0: first.cleared};
+  return {ends, open, estimate, basis, rateUsed, openDiff, openItems, cfg, nonInr, m0, last, cleared0: first.cleared};
 }
 
 const fyOf = m => 'FY ' + (Math.floor(m / 12) - 1) + '-' + String(Math.floor(m / 12) % 100).padStart(2,'0');
@@ -1422,7 +1457,7 @@ function renderGL(){
   // Month-end table: GL balance - cleared by next challan - known items = unexplained
   let h = '<table><thead><tr><th>Month-end</th><th class="n">GL balance' + (est ? ' (est.)' : '') + '</th><th class="n">Cleared by next challan</th><th class="n">Known items</th><th class="n">Unexplained</th><th>Status</th></tr></thead><tbody>';
   E.forEach((e, i) => {
-    const known = od === null ? null : r2(i === 0 ? od : od + e.carried);
+    const known = od === null ? null : r2(od + e.carried);
     let clr, un = '—', st;
     if (e.pending) {
       clr = '<span class="dim">Due ' + esc(fdate(e.due)) + '</span>';
@@ -1430,12 +1465,14 @@ function renderGL(){
     } else if (e.missing) {
       clr = '<span class="dim">No challan in the GL</span>'; st = chip('bad', 'No challan posted');
     } else {
-      clr = fmt(e.cleared) + '<div class="dim">' + esc(fdate(e.challanDate)) + (e.otherClear ? ' · incl. journals ' + fmt(e.otherClear, 0) : '') + '</div>';
+      clr = fmt(e.cleared) + '<div class="dim">' + esc(fdate(e.challanDate)) + (e.otherClear ? ' · incl. journals ' + fmt(e.otherClear, 0) : '') +
+        (e.topUp ? ' · incl. top-up ' + fmt(e.topUp, 0) + ' on ' + esc(fdate(e.topUpDate)) : '') + '</div>';
       if (i === 0) { un = fmt(0); st = od === null || Math.abs(od) <= TOL ? chip('ok', 'Agrees') : chip('bad', 'Opening difference'); }
       else {
         un = fmt(e.unexpl);
         st = Math.abs(e.newUn) <= TOL ? chip('ok', 'Agrees') : chip('bad', rs(e.newUn) + ' unexplained');
-        if (e.late) st += ' ' + chip('warn', 'Paid late');
+        if (e.late) st += ' ' + chip('warn', 'Paid late ' + fdate(e.paidOn));
+        else if (e.postedLate) st += ' ' + chip('info', e.late === false ? 'Paid ' + fdate(e.paidOn) + ', posted ' + fdate(e.challanDate) : 'Posted ' + fdate(e.challanDate));
       }
     }
     const sev = (!e.pending && !e.missing && i > 0 && Math.abs(e.newUn) > TOL) || e.missing ? ' class="sev-bad"' : e.pending ? ' class="muted-row"' : '';
@@ -1447,7 +1484,8 @@ function renderGL(){
   // Items carried: the opening difference first, then the known items
   const li = [];
   if (od !== null && Math.abs(od) > TOL) li.push(['bad', '<b>Opening balance to reconcile · ' + esc(rs(od)) + '</b><br><span class="dim">The INR balance at ' + esc(fdate(monthEnd(E[0].m))) + ' is ' + esc(rs(G.open)) + (est ? ' (estimated)' : '') +
-    '. The first challan and the journals posted with it cleared ' + esc(rs(G.cleared0)) + '. ' + esc(cfg.openNote || 'Kept as a balance to reconcile later.') + '</span>']);
+    '. The first challan and the journals posted with it cleared ' + esc(rs(G.cleared0)) + '. ' +
+    (G.openItems ? 'The known items open at that date (' + esc(rs(G.openItems)) + ') are listed below and left out of this figure. ' : '') + esc(cfg.openNote || 'Kept as a balance to reconcile later.') + '</span>']);
   const isOpen = it => it.from <= end.key && (!it.to || end.key < it.to);
   cfg.items.slice().sort((a, b) => isOpen(b) - isOpen(a)).forEach(it => {
     const open = isOpen(it);
@@ -1461,9 +1499,11 @@ function renderGL(){
   $('#glItems').innerHTML = li.map(([c, t]) => '<li class="' + c + '"><span class="mark"></span><span>' + t + '</span></li>').join('');
 
   $('#glOpenLbl').textContent = 'INR balance at ' + fdate(monthEnd(E[0].m));
-  const inp = $('#glOpen'); if (document.activeElement !== inp) inp.value = state.glOpen === null ? '' : String(state.glOpen);
+  const inp = $('#glOpen'); if (document.activeElement !== inp) inp.value = G.basis === 'entered' ? String(G.open) : '';
   inp.placeholder = G.estimate === null ? 'Enter amount' : String(Math.round(G.estimate));
-  $('#glOpenNote').textContent = state.glOpen !== null ? 'Using the figure you entered. Clear the box to go back to the estimate' + (G.estimate !== null ? ' of ' + rs(G.estimate, 0) + '.' : '.') :
+  $('#glOpenNote').textContent = G.basis === 'entered' ? 'Using the figure you entered. Clear the box to go back to the estimate' + (G.estimate !== null ? ' of ' + rs(G.estimate, 0) + '.' : '.') :
+    state.glOpen !== null ? 'The figure entered (' + rs(state.glOpen) + ') is for ' + fdate(monthEnd(keyMonth(state.glOpenKey))) + ', not the start of this report, so the estimate is used. ' +
+      (G.estimate !== null ? 'Estimated at ' + rs(G.estimate, 0) + '.' : '') :
     G.estimate !== null ? 'The GL gives the opening in USD only, so it is estimated at ' + rs(G.estimate, 0) + ' from the revalued USD balances at about ₹' + fmt(G.rateUsed) +
       ' to the dollar. Enter the INR figure from the ' + fyOf(E[0].m) + ' ledger to replace it.' : 'Enter the INR balance from the prior-year ledger.';
 }
@@ -1499,8 +1539,14 @@ function codeSection(code){ return Object.keys(SECTIONS).find(k => state.codes[k
 function certUsage(rule, perMI){
   const ldc = ruleLdc(rule); if (ldc === null) return {used:0, lines:[]};
   const from = toDate(rule.ldcFrom), v = norm(rule.vendor), kw = norm(rule.keyword);
-  const lines = state.history.filter(h => h.mi < perMI && v && norm(h.vendor).includes(v) && near(lineRate(h), ldc) && (!from || !h.date || h.date >= from) && (!kw || norm(h.desc).includes(kw)));
-  return {used: r2(sum(lines, 'base')), lines};
+  const stat = SECTIONS[rule.section] ? SECTIONS[rule.section].rate : null;
+  const mine = h => h.mi < perMI && v && norm(h.vendor).includes(v) && (!from || !h.date || h.date >= from) && (!kw || norm(h.desc).includes(kw));
+  const lines = state.history.filter(h => mine(h) && near(lineRate(h), ldc));
+  // An invoice that used up the limit is split: part at the certificate rate, the rest at the full rate (SWAI/2026/27/134, Sep 2026).
+  // Its certificate part is the base that, at the lower rate, makes up the TDS charged.
+  const split = stat === null ? [] : state.history.filter(h => mine(h) && lineRate(h) > ldc + 0.005 && lineRate(h) < stat - 0.005);
+  const splitBase = sum(split, h => Math.max(0, Math.min(h.base, (stat * h.base - h.tds * 100) / (stat - ldc))));
+  return {used: r2(sum(lines, 'base') + splitBase), lines: lines.concat(split)};
 }
 
 /* ---------- computation ---------- */
@@ -1674,7 +1720,9 @@ function priorChecks(perMI){
     const codes = [...new Set(lines.map(h => h.code))].filter(c => c && code && c !== code);
     if (codes.length) out.push(['warn', '<b>' + esc(name) + '</b>: reported under code ' + esc(codes.join(', ')) + ' in earlier months, but the vendor rule treats it as ' + esc(secLabel(main.section)) + ' (code ' + esc(code) + ').']);
     const ldc = ruleLdc(main), from = toDate(main.ldcFrom);
-    const under = lines.filter(h => h.tds >= 0 && lineRate(h) < sec.rate - 0.05 && !(ldc !== null && near(lineRate(h), ldc) && (!from || !h.date || h.date >= from)));
+    // Between the certificate rate and the full rate = the invoice on which the limit ran out, so it is part covered
+    const covered = h => ldc !== null && (!from || !h.date || h.date >= from) && (near(lineRate(h), ldc) || (lineRate(h) > ldc && lineRate(h) < sec.rate));
+    const under = lines.filter(h => h.tds >= 0 && lineRate(h) < sec.rate - 0.05 && !covered(h));
     if (under.length) {
       const short = sum(under, h => h.base * (sec.rate - lineRate(h)) / 100);
       out.push(['bad', '<b>' + esc(name) + '</b>: ' + under.length + ' invoices were deducted at ' + [...new Set(under.map(lineRate))].join('%, ') + '% with no certificate cover (' + esc(nums(under)) + '). At the ' + sec.rate + '% rate for ' + esc(secLabel(main.section)) +
@@ -1695,7 +1743,9 @@ function priorChecks(perMI){
   });
 
   // TDS on 194-I rent under the Rs 50,000 a month limit
-  prior.filter(h => (h.code === state.codes['194-I(a)'] || h.code === state.codes['194-I(b)']) && h.tds > 0 && h.base <= 50000).forEach(h =>
+  // Only bills the vendor rules treat as rent: Indiqube's event and IT charges paid under the rent code are 194C/194J, where the limit does not apply
+  const isRent = h => { const s = vendorRules(h.vendor).length ? classify({vendor: h.vendor, desc: h.desc}).section : codeSection(h.code); return s === '194-I(a)' || s === '194-I(b)'; };
+  prior.filter(h => (h.code === state.codes['194-I(a)'] || h.code === state.codes['194-I(b)']) && isRent(h) && h.tds > 0 && h.base <= 50000).forEach(h =>
     out.push(['info', '<b>' + esc(h.vendor) + ' ' + esc(h.number) + '</b>: rent of ' + rs(h.base,0) + ' is under the ₹50,000 a month limit, so the ' + rs(h.tds,0) + ' TDS was not required.']));
 
   // Invoices from the previous financial year carried into this year's challans
@@ -1801,6 +1851,11 @@ function render(){
   renderCerts(); renderGoods(); renderDiffs(); renderGL(); renderInvoices(); renderBank();
   const pc = priorChecks(M.perMI);
   M.prior = pc;
+  const savedRows = recall('history', []), savedMonths = [...new Set(savedRows.map(r => r.month))].sort();
+  $('#savedBlock').hidden = !savedMonths.length;
+  $('#savedMonths').innerHTML = savedMonths.map(m => { const rows = savedRows.filter(r => r.month === m);
+    return '<li><div class="what"><b>' + esc(monthLabel(keyMonth(m))) + '</b><div class="dim">' + rows.length + ' invoice' + (rows.length === 1 ? '' : 's') + ', TDS ' + esc(rs(r2(sum(rows, r => +r.tds || 0)), 0)) +
+      (rows[0] && rows[0].source ? ' · ' + esc(rows[0].source) : '') + '</div></div><div class="acts"><button class="btn small" type="button" data-unsave="' + esc(m) + '">Remove</button></div></li>'; }).join('');
   $('#priorCount').textContent = pc.length ? String(pc.length) : '';
   const rank = {bad:0, warn:1, info:2, ok:3};
   $('#prior').innerHTML = (pc.length ? pc.slice().sort((a, b) => rank[a[0]] - rank[b[0]]) : [['ok', state.history.some(h => h.mi < M.perMI) ? 'No issues found in earlier months.' : 'No earlier months loaded.']]).map(([c, t]) => '<li class="' + c + '"><span class="mark"></span><span>' + t + '</span></li>').join('');
@@ -1890,7 +1945,41 @@ function renderDiffs(){
   $('#diffs').innerHTML = h;
 }
 
+// Invoice lines for the month picked under Challan: the uploaded month's invoices are worked out here and can be edited;
+// earlier months come from the advisor's summaries (or a saved month) and are read-only. The Excel copy follows the same pick.
+const curInvLines = () => M.invs.map(i => ({mi: M.perMI, vendor: i.vendor, number: i.number, date: i.date, desc: i.desc, base: i.base, gst: i.tax,
+  code: state.codes[i.section] || '', section: i.section, rate: i.sec ? i.rate : null, tds: i.tds, interest: i.interest || 0, source: 'Uploaded month'}));
+const histInvLines = m => state.history.filter(h => h.mi === m).map(h => ({mi: m, vendor: h.vendor, number: h.number, date: h.date, desc: h.desc, base: h.base, gst: h.gst || 0,
+  code: h.code || '', section: codeSection(h.code), rate: h.base ? lineRate(h) : null, tds: h.tds, interest: h.interest || 0, source: h.source || 'Advisor sheet'}));
+function viewInvLines(){
+  if (state.view === 'fy') return fyMonths().flatMap(m => m === M.perMI ? curInvLines() : histInvLines(m));
+  return isCurView() ? curInvLines() : histInvLines(state.view);
+}
+function renderInvoicesRO(lines){
+  const months = [...new Set(lines.map(l => l.mi))].sort((a, b) => a - b), many = months.length > 1;
+  $('#invCount').textContent = '· ' + lines.length + ' invoice' + (lines.length === 1 ? '' : 's') + ', ' + (many ? monthLabel(months[0]) + ' to ' + monthLabel(months.at(-1)) : monthLabel(months[0] ?? state.view));
+  if (!lines.length) { $('#invoices').innerHTML = '<p class="empty">No invoices recorded for this month.</p>'; return; }
+  let h = '<p class="note" style="margin:0 0 8px">' + (many ? 'Earlier months are from the advisor\'s summaries and are read-only; switch to ' + esc(monthLabel(M.perMI)) + ' to change sections.' :
+    'From the ' + esc(lines[0].source === 'Advisor sheet' ? 'advisor\'s summary' : lines[0].source.toLowerCase()) + ' for this month. Read-only: change sections in the uploaded month.') + '</p>';
+  h += '<table><thead><tr><th>Invoice</th><th>Date</th><th>Description</th><th class="n">Before GST</th><th class="n">GST</th><th>Code</th><th class="n">Rate</th><th class="n">TDS</th><th class="n">Interest</th></tr></thead><tbody>';
+  months.forEach(m => {
+    if (many) h += '<tr class="grp"><td colspan="9">' + esc(monthLabel(m)) + '</td></tr>';
+    const byVendor = new Map(); lines.filter(l => l.mi === m).forEach(l => { if (!byVendor.has(l.vendor)) byVendor.set(l.vendor, []); byVendor.get(l.vendor).push(l); });
+    [...byVendor.entries()].sort((a, b) => a[0].localeCompare(b[0])).forEach(([v, list]) => {
+      h += '<tr class="muted-row"><td colspan="9"><b>' + esc(v) + '</b></td></tr>';
+      list.slice().sort((a, b) => (a.date || 0) - (b.date || 0)).forEach(l => {
+        h += '<tr><td>' + esc(l.number) + '</td><td class="num">' + fdate(l.date) + '</td><td class="desc">' + esc(l.desc) + '</td><td class="n">' + fmt(l.base) + '</td><td class="n">' + (l.gst ? fmt(l.gst) : '—') +
+          '</td><td>' + (l.code ? '<span class="code">' + esc(l.code) + '</span>' + (l.section ? ' <span class="dim">' + esc(secLabel(l.section)) + '</span>' : '') : '—') + '</td><td class="n">' + (l.rate === null ? '—' : fmt(l.rate) + '%') +
+          '</td><td class="n">' + fmt(l.tds) + '</td><td class="n">' + (l.interest ? fmt(l.interest, 0) : '—') + '</td></tr>';
+      });
+    });
+  });
+  h += '</tbody><tfoot><tr><td colspan="7">Total</td><td class="n">' + fmt(r2(sum(lines, 'tds'))) + '</td><td class="n">' + fmt(r2(sum(lines, 'interest')), 0) + '</td></tr></tfoot></table>';
+  $('#invoices').innerHTML = h;
+}
 function renderInvoices(){
+  M.invView = viewInvLines();
+  if (!isCurView()) { renderInvoicesRO(M.invView); return; }
   $('#invCount').textContent = '· ' + M.invs.length + ' invoices, ' + monthLabel(M.perMI);
   const opts = sel => '<option value=""' + (sel ? '' : ' selected') + '>Choose section</option>' + Object.keys(SECTIONS).map(k => '<option value="' + esc(k) + '"' + (k === sel ? ' selected' : '') + '>' + esc(secLabel(k) + ' · ' + SECTIONS[k].rate + '%') + '</option>').join('');
   let h = '<table><thead><tr><th>Invoice</th><th>Date</th><th>Description</th><th class="n">Before GST</th><th class="n">GST</th><th>Section</th><th class="n">Rate</th><th class="n">TDS</th><th class="n">Interest</th><th>Notes</th></tr></thead><tbody>';
@@ -2374,8 +2463,8 @@ $('#copyChallan').addEventListener('click', () => {
   copy(rows.map(r => r.join('\t')).join('\n'));
 });
 $('#copyInvoices').addEventListener('click', () => {
-  const rows = [['Vendor','Invoice','Date','Description','Before GST','GST','Section','Code','Rate %','TDS','Interest']].concat(M.invs.map(i =>
-    [i.vendor, i.number, fdate(i.date), i.desc, i.base, i.tax, i.section ? secLabel(i.section) : '', state.codes[i.section] || '', i.rate, i.tds, i.interest]));
+  const rows = [['Month','Vendor','Invoice','Date','Description','Before GST','GST','Section','Code','Rate %','TDS','Interest']].concat((M.invView || []).map(l =>
+    [monthLabel(l.mi), l.vendor, l.number, fdate(l.date), l.desc, l.base, l.gst, l.section ? secLabel(l.section) : '', l.code, l.rate ?? '', l.tds, l.interest]));
   copy(rows.map(r => r.join('\t')).join('\n'));
 });
 
@@ -2435,6 +2524,13 @@ $('#master').addEventListener('click', e => {
 $('#addRule').addEventListener('click', () => { state.rules.push({...BLANK_RULE}); store('rules10', state.rules); renderRules(); });
 $('#resetRules').addEventListener('click', () => { state.rules = ent().rules.map(r => ({...BLANK_RULE, ...r})); state.overrides = {}; store('rules10', state.rules); store('overrides', {}); render(); toast('Default rules restored'); });
 $('#codes').addEventListener('change', e => { const k = e.target.dataset.code; if (!k) return; state.codes[k] = e.target.value.trim(); store('codes2', state.codes); render(); });
+$('#savedMonths').addEventListener('click', e => {
+  const b = e.target.closest('[data-unsave]'); if (!b) return;
+  const month = b.dataset.unsave;
+  store('history', recall('history', []).filter(r => r.month !== month));
+  loadEntity(currentEntity); render();
+  toast(monthLabel(keyMonth(month)) + ' removed; the advisor\'s or built-in figures are back');
+});
 $('#saveMonth').addEventListener('click', () => {
   const month = Math.floor(M.perMI / 12) + '-' + String(M.perMI % 12 + 1).padStart(2,'0');
   const rows = M.invs.filter(i => i.tds > 0).map(i => ({month, vendor:i.vendor, number:i.number, date: i.date ? iso(i.date) : '', base:i.base, gst:i.tax,
@@ -2463,7 +2559,9 @@ $('#tabs').addEventListener('keydown', e => {
 document.addEventListener('click', e => { const g = e.target.closest('[data-go]'); if (g) showTab(g.dataset.go, true); });
 $('#sampleChip').addEventListener('click', () => showTab('data', true));
 $('#glOpen').addEventListener('change', e => {
-  const v = e.target.value.trim(); state.glOpen = v === '' || isNaN(+v) ? null : +v; store('glOpen', state.glOpen); render();
+  const v = e.target.value.trim(); state.glOpen = v === '' || isNaN(+v) ? null : +v;
+  state.glOpenKey = state.glOpen === null || !M.gl ? null : monthKey(M.gl.m0 - 1);
+  store('glOpen', state.glOpen === null ? null : {v: state.glOpen, key: state.glOpenKey}); render();
 });
 
 $('#payTo').addEventListener('change', e => { store('payTo', e.target.value.trim()); renderPay(); });
@@ -2498,6 +2596,7 @@ $('#version').textContent = 'v' + VERSION;
 $('#changes').innerHTML = CHANGES.map(([v, t]) => '<li class="info"><span class="mark"></span><span><b>' + esc(v) + '</b> · ' + esc(t) + '</span></li>').join('');
 })();
 </script>
+
 
 </body>
 </html>
