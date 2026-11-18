@@ -50,6 +50,8 @@ for (const k of ['tech', 'digital']) {
 loadEntity('tech'); { const aug = computeGL().ends.find(e => monthKey(e.m) === '2026-08');
   expect('Aug challan paid date from CIN', aug.paidOn ? aug.paidOn.getDate() : 0, 7, 0);
   expect('Aug challan not late', aug.late === false ? 1 : 0, 1, 0); }
+// With September's known item, the sample GL expects the challan actually paid on 8 Oct 2026
+loadEntity('tech'); expect('Sep 2026 challan expected from the GL', computeGL().ends.at(-1).expected, 241044, 1);
 // Differences for an earlier month check only that month's lines
 loadEntity('tech'); { const aug = priorChecks(M.perMI, 2026 * 12 + 7).map(p => p[1]).join(' | ');
   expect('Aug differences mention Aug invoice KA/JUL26/1808', /KA\\/JUL26\\/1808/.test(aug) ? 1 : 0, 1, 0);

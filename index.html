@@ -471,8 +471,9 @@ details.card > .inner{padding:0 18px 18px;display:flex;flex-direction:column;gap
 (function(){
 // Bump the version and add a line for every change to the rules or the calculation. The version is stamped on each saved review,
 // so a month's figures can be traced to the logic that produced them. tests/regression.js must pass before a release.
-const VERSION = '2026.11.18.6';
+const VERSION = '2026.11.18.7';
 const CHANGES = [
+  ['2026.11.18.7', 'AXI Technologies GL: known items for September (₹1,337.72, settled by the 31 Oct challan) and October (−₹2,029 paid on 7 Nov, not booked). Known items that start after the ledger ends are left out of the list.'],
   ['2026.11.18.6', 'Differences to address follow the month picked under Challan: an earlier month shows that month\'s checks from the advisor\'s summary. The payment email shows only for the uploaded month.'],
   ['2026.11.18.5', 'Bills not yet paid in the bank file are no longer listed as differences (their TDS is already in the challan; Invoice detail marks them). Malnad Stays (accommodation only) added as no TDS.'],
   ['2026.11.18.4', 'A top-up challan later in the same month counts as clearing the previous month. An invoice on which a certificate limit ran out (part at the lower rate) counts against the limit and is not flagged as uncovered. The rent-limit note applies only to bills the vendor rules treat as rent. Saved months are listed under Earlier months and can be removed.'],
@@ -990,7 +991,11 @@ const ENTITIES = {
       items: [
         {from:'2026-04', to:'2026-05', amount:141499.43, label:'FY 2025-26 invoices re-posted', text:'FY 2025-26 invoices posted again in April, reversed on 1 Jun 2026 (StatAdj ₹1,41,499.40)'},
         {from:'2026-05', amount:92, text:'Computer Junction KATI-26-27-00116: TDS booked but left out of the 7 Jun challan'},
-        {from:'2026-06', amount:451.60, text:'Native Promoters RE-033: TDS booked ₹14,201.60, challan paid ₹13,750'}
+        {from:'2026-06', amount:451.60, text:'Native Promoters RE-033: TDS booked ₹14,201.60, challan paid ₹13,750'},
+        {from:'2026-09', amount:1337.72, label:'Sep TDS left out of the 8 Oct challan',
+          text:'SWAI 134–137: AP deducted ₹1,47,337.63 but the 8 Oct challan paid ₹1,45,867 (the advisor used August\'s figures), ₹1,470.63; less WeP 268329703472 paid but not booked, ₹132; less rounding, ₹0.91. Paid in the ₹1,36,087 challan of 31 Oct 2026 (CIN 261031…), which AP has not posted to 250500 yet. Post it in October, with the SWAI recovery of ₹1,24,784.13 (Cr 250500), and this clears.'},
+        {from:'2026-10', amount:-2029, label:'Oct TDS paid on 7 Nov but not booked',
+          text:'Onlineteksupport BLR2627IN002289, ₹1,410 (AP did not withhold), and Indiqube KA/SEP26/1811, 1758, 1140 and KA/OCT26/1243, ₹619 (AP booked 1%, 2% was due), were paid in the ₹5,02,945 challan of 7 Nov 2026 but are not in 250500. Book Dr vendor payable, Cr 250500 ₹2,029 and recover from the vendors; this then clears.'}
       ]}},
   digital: {name:'AXI Digital India Private Limited', line:'AXI Digital India · PAN ABDCA5184A · TDS', history: DIGITAL_HISTORY, goods: [], sample: true,
     inv: DIGITAL_INV, bankRows: DIGITAL_BANK, invNote: 'Concur extract, September 2026', bankNote: 'Kotak and HDFC statements, September 2026',
@@ -1490,7 +1495,8 @@ function renderGL(){
     '. The first challan and the journals posted with it cleared ' + esc(rs(G.cleared0)) + '. ' +
     (G.openItems ? 'The known items open at that date (' + esc(rs(G.openItems)) + ') are listed below and left out of this figure. ' : '') + esc(cfg.openNote || 'Kept as a balance to reconcile later.') + '</span>']);
   const isOpen = it => it.from <= end.key && (!it.to || end.key < it.to);
-  cfg.items.slice().sort((a, b) => isOpen(b) - isOpen(a)).forEach(it => {
+  // Items that start after the ledger's last month are left out until a report reaches them
+  cfg.items.filter(it => it.from <= end.key).sort((a, b) => isOpen(b) - isOpen(a)).forEach(it => {
     const open = isOpen(it);
     li.push([open ? 'warn' : 'ok', '<b>' + esc(rs(it.amount)) + ' · ' + esc(it.label || it.text.split(':')[0]) + '</b> ' + (open ? chip('warn', 'Open') : chip('ok', 'Cleared ' + monthLabel(keyMonth(it.to)))) +
       '<br><span class="dim">' + esc(it.text) + ' From ' + esc(monthLabel(keyMonth(it.from))) + '.</span>']);
