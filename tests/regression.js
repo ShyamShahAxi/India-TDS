@@ -50,6 +50,10 @@ for (const k of ['tech', 'digital']) {
 loadEntity('tech'); { const aug = computeGL().ends.find(e => monthKey(e.m) === '2026-08');
   expect('Aug challan paid date from CIN', aug.paidOn ? aug.paidOn.getDate() : 0, 7, 0);
   expect('Aug challan not late', aug.late === false ? 1 : 0, 1, 0); }
+// Differences for an earlier month check only that month's lines
+loadEntity('tech'); { const aug = priorChecks(M.perMI, 2026 * 12 + 7).map(p => p[1]).join(' | ');
+  expect('Aug differences mention Aug invoice KA/JUL26/1808', /KA\\/JUL26\\/1808/.test(aug) ? 1 : 0, 1, 0);
+  expect('Aug differences leave out June invoice KA/JUN26/1219', /KA\\/JUN26\\/1219/.test(aug) ? 1 : 0, 0, 0); }
 // Invoice detail follows the month picked under Challan
 loadEntity('tech'); state.view = 2026 * 12 + 7; render();
 expect('Invoice detail for Aug 2026 shows Aug lines', M.invView.length, state.history.filter(h => h.month === '2026-08').length, 0);

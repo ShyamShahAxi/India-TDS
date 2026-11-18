@@ -463,8 +463,9 @@ details.card > .inner{padding:0 18px 18px;display:flex;flex-direction:column;gap
 (function(){
 // Bump the version and add a line for every change to the rules or the calculation. The version is stamped on each saved review,
 // so a month's figures can be traced to the logic that produced them. tests/regression.js must pass before a release.
-const VERSION = '2026.11.18.5';
+const VERSION = '2026.11.18.6';
 const CHANGES = [
+  ['2026.11.18.6', 'Differences to address follow the month picked under Challan: an earlier month shows that month\'s checks from the advisor\'s summary. The payment email shows only for the uploaded month.'],
   ['2026.11.18.5', 'Bills not yet paid in the bank file are no longer listed as differences (their TDS is already in the challan; Invoice detail marks them). Malnad Stays (accommodation only) added as no TDS.'],
   ['2026.11.18.4', 'A top-up challan later in the same month counts as clearing the previous month. An invoice on which a certificate limit ran out (part at the lower rate) counts against the limit and is not flagged as uncovered. The rent-limit note applies only to bills the vendor rules treat as rent. Saved months are listed under Earlier months and can be removed.'],
   ['2026.11.18.3', 'Invoice detail and its Excel copy follow the month picked under Challan: earlier months show the advisor\'s invoice lines (read-only), and the year to date shows every month.'],
@@ -1671,15 +1672,18 @@ function compute(){
 }
 
 /* ---------- earlier-month checks ---------- */
-function priorChecks(perMI){
-  const out = []; const prior = state.history.filter(h => h.mi < perMI);
+// only = a month index: check that one month's lines (Challan tab, earlier month picked); the running certificate totals and
+// billing gaps are year-level, so they are left to the Earlier months tab
+function priorChecks(perMI, only){
+  const one = typeof only === 'number';
+  const out = []; const prior = state.history.filter(h => one ? h.mi === only : h.mi < perMI);
   if (!prior.length) return out;
   const nums = list => list.map(h => h.number).join(', ');
   state.rules.forEach(rule => {
     const ldc = ruleLdc(rule); if (ldc === null || !rule.vendor) return;
     const v = norm(rule.vendor), limit = toNum(rule.ldcLimit), from = toDate(rule.ldcFrom);
     const u = certUsage(rule, perMI);
-    if (limit) {
+    if (limit && !one) {
       const left = limit - u.used;
       out.push([left <= 0 ? 'bad' : (left < limit * 0.2 ? 'warn' : 'info'), '<b>' + esc(rule.vendor) + ' certificate ' + esc(rule.cert || '') + '</b>: ' + rs(u.used,0) + ' used before ' + esc(monthLabel(perMI)) +
         ' (' + u.lines.length + ' invoices at ' + ldc + '%' + (rule.keyword ? ', identified as ' + esc(rule.keyword) : '') + '). ' + (left > 0 ? rs(left,0) + ' of ' + rs(limit,0) + ' was left at the start of ' + esc(monthLabel(perMI)) + ' (the certificates table also deducts this month).' : 'The ' + rs(limit,0) + ' limit was used up before ' + esc(monthLabel(perMI)) + '; further bills are at the full rate.')]);
@@ -1729,7 +1733,7 @@ function priorChecks(perMI){
   const mark = (v, m) => { const k = norm(v).split(' ').slice(0, 2).join(' '); if (!present.has(k)) present.set(k, {name: v, months: new Set()}); present.get(k).months.add(m); };
   prior.forEach(h => mark(h.vendor, h.mi));
   ((M && M.invs) || []).forEach(i => mark(i.vendor, perMI));
-  present.forEach(p => {
+  if (!one) present.forEach(p => {
     if (p.months.size < 3) return;
     const first = Math.min(...p.months), gaps = [];
     for (let m = first; m <= perMI; m++) if (!p.months.has(m)) gaps.push(monthLabel(m));
@@ -1933,6 +1937,15 @@ function renderDiffs(){
   noCert.forEach((amt, v) => rows.push(['warn', v, 'Lower rate used but no certificate number is recorded. Without a certificate this much more is due.', amt]));
   if (M.late) rows.push(['bad', 'All codes', 'The payment date is after the due date of ' + fdate(M.due) + ', so interest applies to every line.', null]);
   M.diffRows = rows; $('#diffCount').textContent = rows.length ? String(rows.length) : '';
+  // An earlier month picked under Challan: there is no bank file for it, so show the checks the advisor's summary allows
+  if (typeof state.view === 'number' && state.view !== M.perMI) {
+    const m = state.view, pc = priorChecks(M.perMI, m), rank = {bad:0, warn:1, info:2, ok:3};
+    $('#diffTitle').textContent = 'Differences to address · ' + monthLabel(m);
+    $('#diffs').innerHTML = '<p class="note" style="margin:12px 16px 0">From the advisor\'s summary for ' + esc(monthLabel(m)) + '. There is no bank file for this month, so this checks rates, codes, certificates and interest; what AP deducted is checked only for the uploaded month (' + esc(monthLabel(M.perMI)) + ').</p>' +
+      '<ul class="issues">' + (pc.length ? pc.slice().sort((a, b) => rank[a[0]] - rank[b[0]]) : [['ok', 'No issues found for ' + esc(monthLabel(m)) + '.']]).map(([c, t]) => '<li class="' + c + '"><span class="mark"></span><span>' + t + '</span></li>').join('') + '</ul>';
+    return;
+  }
+  if (state.view === 'fy') $('#diffTitle').textContent = 'Differences to address · ' + monthLabel(M.perMI) + ' (uploaded month; earlier months are under Earlier months)';
   if (!rows.length) { $('#diffs').innerHTML = '<p class="empty">No differences. AP deductions match the TDS due for every vendor.</p>'; return; }
   let h = '<table><thead><tr><th>Vendor</th><th>What to address</th><th class="n">Amount</th></tr></thead><tbody>';
   rows.forEach(([s, v, t, a]) => { h += '<tr class="sev-' + s + '"><td>' + esc(v) + '</td><td>' + esc(t) + '</td><td class="n">' + (a === null ? '—' : fmt(a)) + '</td></tr>'; });
@@ -2182,6 +2195,8 @@ function payEmail(){
   return {subject, html, text: T.join('\n'), month, key: monthKey(m)};
 }
 function renderPay(){
+  // The email is for the uploaded month's challan only
+  $('#payBlock').hidden = !isCurView();
   const e = payEmail(), reviewed = !!(recall('reviewed', {})[e.key]), to = recall('payTo', '');
   const inp = $('#payTo'); if (document.activeElement !== inp) inp.value = to;
   $('#payReviewed').checked = reviewed;
