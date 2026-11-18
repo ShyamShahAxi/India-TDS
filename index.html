@@ -471,8 +471,9 @@ details.card > .inner{padding:0 18px 18px;display:flex;flex-direction:column;gap
 (function(){
 // Bump the version and add a line for every change to the rules or the calculation. The version is stamped on each saved review,
 // so a month's figures can be traced to the logic that produced them. tests/regression.js must pass before a release.
-const VERSION = '2026.11.18.4';
+const VERSION = '2026.11.18.5';
 const CHANGES = [
+  ['2026.11.18.5', 'Bills not yet paid in the bank file are no longer listed as differences (their TDS is already in the challan; Invoice detail marks them). Malnad Stays (accommodation only) added as no TDS.'],
   ['2026.11.18.4', 'A top-up challan later in the same month counts as clearing the previous month. An invoice on which a certificate limit ran out (part at the lower rate) counts against the limit and is not flagged as uncovered. The rent-limit note applies only to bills the vendor rules treat as rent. Saved months are listed under Earlier months and can be removed.'],
   ['2026.11.18.3', 'Invoice detail and its Excel copy follow the month picked under Challan: earlier months show the advisor\'s invoice lines (read-only), and the year to date shows every month.'],
   ['2026.11.18.2', 'GL reconciliation marks a challan "Paid late" only when the bank file shows the CBDT payment after the due date (date read from the CIN). A challan posted after the due date with no bank evidence shows as "Posted", not late.'],
@@ -520,7 +521,8 @@ const DEFAULT_RULES = [
   {vendor:'marudhar', section:'NIL'},
   {vendor:'atria convergence', section:'194C'},
   {vendor:'icici lombard', section:'NIL'},
-  {vendor:'consolidated teknics', section:'NIL'}
+  {vendor:'consolidated teknics', section:'NIL'},
+  {vendor:'malnad stays', section:'NIL'}
 ].map(r => ({...BLANK_RULE, ...r}));
 // Earlier months, from the advisor's monthly TDS payable summaries: [month, vendor, invoice, date, before GST, GST, TDS, interest, code, nature]
 // Goods purchases for 194Q tracking (value before GST): [month, vendor, document, date, value, note]
@@ -1930,7 +1932,9 @@ function renderDiffs(){
     if (hasCertRule && v.list.some(i => i.hasLdc) && v.list.some(i => !i.hasLdc && i.tds > 0)) why.push('some bills are not covered by the certificate and need the normal rate');
     if (v.status === 'short') rows.push(['bad', v.name, 'AP deducted ' + rs(v.D) + ' on the bills paid; ' + rs(v.duePaid) + ' is due' + (why.length ? ': ' + why.join('; ') : '') + '. AXI pays the difference and recovers it from the next payment.', v.short]);
     if (v.status === 'excess') rows.push(['warn', v.name, 'AP deducted ' + rs(v.D) + ' on the bills paid; only ' + rs(v.duePaid) + ' is due. The extra is still deposited because the vendor will claim it.', v.excess]);
-    if (v.status === 'nobank') rows.push(['warn', v.name, state.bank.length ? 'Not paid in this bank file. TDS is still due this month, because it falls due when the bill is booked.' : 'No payment found in the bank file, so TDS is worked out from the invoices only.', null]);
+    // A bill not yet paid needs no action: its TDS is already in the challan, and Invoice detail marks it "Not paid yet".
+    // Only flag it when there is no bank file at all and the vendor has TDS, since then nothing was checked.
+    if (v.status === 'nobank' && !state.bank.length && v.tds > 0) rows.push(['warn', v.name, 'No bank file loaded, so TDS is worked out from the invoices only.', null]);
   });
   M.invs.filter(i => !i.sec).forEach(i => rows.push(['bad', i.vendor, 'Invoice ' + i.number + ' has no TDS section. Set one in Invoice detail or Vendor rules.', null]));
   const noCert = new Map(); M.invs.filter(i => i.hasLdc && !i.cert).forEach(i => noCert.set(i.vendor, (noCert.get(i.vendor) || 0) + r2(i.ldcPart * (i.stat - i.rate) / 100)));
